@@ -1,0 +1,182 @@
+<Window x:Class="Flotilla.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:Flotilla.Views"
+        Title="Flotilla"
+        Width="1280" Height="820" MinWidth="960" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Bg}"
+        Foreground="{StaticResource Text}"
+        FontFamily="{StaticResource Body}"
+        FontSize="14"
+        UseLayoutRounding="True">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="64" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Border x:Name="Root">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="232"/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+
+            <Border Background="{StaticResource Side}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+                <DockPanel LastChildFill="False">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Height="64" Margin="22,0,0,0">
+                        <Border Width="28" Height="28" CornerRadius="7" Background="{StaticResource Mark}" BorderBrush="{StaticResource AccentRing}" BorderThickness="1">
+                            <Path Data="{StaticResource IconSonar}" Style="{StaticResource Icon}" Stroke="{StaticResource Accent}" Width="18" Height="18" StrokeThickness="1.6"/>
+                        </Border>
+                        <TextBlock Text="Flotilla" Margin="11,0,0,1" VerticalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="20"/>
+                    </StackPanel>
+
+                    <StackPanel DockPanel.Dock="Top" Margin="14,6,14,0">
+                        <RadioButton x:Name="BrowseTab" Style="{StaticResource Nav}" IsChecked="True" Checked="OnTabChanged" AutomationProperties.Name="Browse">
+                            <DockPanel>
+                                <Path Data="{StaticResource IconBrowse}" Style="{StaticResource Icon}"/>
+                                <Border DockPanel.Dock="Right" Background="{StaticResource Chip}" CornerRadius="9" Padding="8,1,8,2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Tiles.Count, StringFormat={}{0:N0}}" FontSize="12" FontWeight="Normal" Foreground="{StaticResource Muted}"/>
+                                </Border>
+                                <TextBlock Text="Browse" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="InstalledTab" Style="{StaticResource Nav}" Checked="OnTabChanged" AutomationProperties.Name="Installed">
+                            <DockPanel>
+                                <Path Data="{StaticResource IconInstalled}" Style="{StaticResource Icon}"/>
+                                <Border DockPanel.Dock="Right" Background="{StaticResource Chip}" CornerRadius="9" Padding="8,1,8,2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Installed.Count}" FontSize="12" FontWeight="Normal" Foreground="{StaticResource Muted}"/>
+                                </Border>
+                                <Ellipse DockPanel.Dock="Right" Width="7" Height="7" Margin="0,0,8,0" Fill="{StaticResource Accent}" VerticalAlignment="Center" ToolTip="Updates are ready">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding UpdateCount}" Value="0">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock Text="Installed" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </RadioButton>
+                    </StackPanel>
+
+                    <Button DockPanel.Dock="Bottom" Style="{StaticResource Primary}" Height="44" Margin="14,0,14,16" Click="OnPlay" ToolTip="Starts UBOAT through Steam">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPlay}" Style="{StaticResource Icon}" Stroke="{StaticResource OnAccent}" Fill="{StaticResource OnAccent}"
+                                  Width="10" Height="11" StrokeThickness="1.4" Margin="0,0,10,0"/>
+                            <TextBlock Text="Play UBOAT"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Border DockPanel.Dock="Bottom" DataContext="{Binding Status}" Margin="14,0,14,12" Padding="12" CornerRadius="6"
+                            Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1"
+                            Visibility="{Binding IsWorking, Converter={StaticResource Visible}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Width="40" Height="40" CornerRadius="4" Background="{StaticResource Chip}">
+                                <Grid>
+                                    <Path Data="{StaticResource IconDownload}" Style="{StaticResource Icon}" Stroke="{StaticResource Muted}" Width="16" Height="16"/>
+                                    <Border CornerRadius="4">
+                                        <Border.Background>
+                                            <ImageBrush ImageSource="{Binding WorkTile.Thumbnail}" Stretch="UniformToFill"/>
+                                        </Border.Background>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding WorkTitle}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding WorkDetail}" Margin="0,2,0,0" FontSize="12" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+
+                            <Grid Grid.Row="1" Grid.ColumnSpan="2" Height="4" Margin="0,12,0,0">
+                                <Border CornerRadius="2" Background="{StaticResource Track}"/>
+                                <Border CornerRadius="2" Background="{StaticResource Accent}" RenderTransformOrigin="0,0.5">
+                                    <Border.RenderTransform>
+                                        <ScaleTransform ScaleX="{Binding Progress}"/>
+                                    </Border.RenderTransform>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                </DockPanel>
+            </Border>
+
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="64"/>
+                    <RowDefinition/>
+                </Grid.RowDefinitions>
+
+                <views:WorkshopView x:Name="Browse" Grid.Row="1"/>
+                <views:ModPage x:Name="Details" Grid.RowSpan="2" Visibility="Collapsed"/>
+                <views:InstalledView x:Name="InstalledPage" Grid.Row="1" Visibility="Collapsed"/>
+
+                <Grid Margin="28,0,12,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1000*" MaxWidth="520"/>
+                        <ColumnDefinition Width="*" MinWidth="40"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="SearchBox" Style="{StaticResource Search}" Tag="Search mods" VerticalAlignment="Center"
+                             WindowChrome.IsHitTestVisibleInChrome="True" TextChanged="OnSearch" AutomationProperties.Name="Search mods"/>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource Caption}" Click="OnMinimize" AutomationProperties.Name="Minimise">
+                            <Path Data="{StaticResource IconMinimize}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1" Width="10" Height="10"/>
+                        </Button>
+                        <Button Style="{StaticResource Caption}" Click="OnMaximize" AutomationProperties.Name="Maximise">
+                            <Path x:Name="MaximizeGlyph" Data="{StaticResource IconMaximize}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1" Width="10" Height="10"/>
+                        </Button>
+                        <Button Style="{StaticResource CaptionClose}" Click="OnClose" AutomationProperties.Name="Close">
+                            <Path Data="{StaticResource IconClose}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1" Width="10" Height="10"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="1" DataContext="{Binding Status}" Margin="0,0,28,24" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                        MaxWidth="460" Padding="14,10,8,10" CornerRadius="6" Background="{StaticResource Raised}" BorderBrush="{StaticResource Ghost}" BorderThickness="1"
+                        Visibility="{Binding HasMessage, Converter={StaticResource Visible}}">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="24" ShadowDepth="8" Direction="270" Opacity="0.4" Color="Black"/>
+                    </Border.Effect>
+                    <DockPanel>
+                        <Path Width="15" Height="15" Margin="0,0,12,0">
+                            <Path.Style>
+                                <Style TargetType="Path" BasedOn="{StaticResource Icon}">
+                                    <Setter Property="Data" Value="{StaticResource IconCheck}"/>
+                                    <Setter Property="Stroke" Value="{StaticResource AccentText}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsError}" Value="True">
+                                            <Setter Property="Stroke" Value="{StaticResource Danger}"/>
+                                            <Setter Property="Data" Value="{StaticResource IconWarning}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" MinWidth="28" Height="28" Margin="10,0,0,0" VerticalAlignment="Center"
+                                Click="OnDismissToast" AutomationProperties.Name="Dismiss">
+                            <Path Data="{StaticResource IconClose}" Style="{StaticResource Icon}" Width="9" Height="9" StrokeThickness="1.4"/>
+                        </Button>
+                        <TextBlock Text="{Binding Message}" VerticalAlignment="Center" FontSize="13.5" TextWrapping="Wrap" LineHeight="20"/>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

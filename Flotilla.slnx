@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Flotilla/Flotilla.csproj" />
+  <Project Path="tests/Flotilla.Tests/Flotilla.Tests.csproj" />
+</Solution>
