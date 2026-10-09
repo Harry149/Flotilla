@@ -1,5 +1,7 @@
 using System.IO;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Flotilla.Mods;
 
@@ -25,6 +27,33 @@ public sealed class ModList(string gameFile, string orderFile)
         }
         Write(gameFile, all.Where(m => m.Enabled).Select(m => m.Key));
         Write(orderFile, all.Select(m => m.Key));
+        SortLauncher(all.Select(m => m.Key).ToList());
+    }
+
+    // The UBOAT launcher keeps its own copy of the order and rewrites modlist.txt from it on start, so it has to match.
+    void SortLauncher(List<string> keys)
+    {
+        var path = Path.Combine(Path.GetDirectoryName(gameFile)!, "Launcher", "launcherdata");
+        if (!File.Exists(path)) return;
+
+        JsonNode? root;
+        try { root = JsonNode.Parse(File.ReadAllText(path)); }
+        catch (JsonException) { return; }
+        if (root?["modList"] is not JsonArray mods) return;
+
+        int Rank(JsonNode? mod)
+        {
+            var index = keys.FindIndex(key => Keys.Equals(key, mod?["modName"]?.GetValue<string>()));
+            return index < 0 ? int.MaxValue : index;
+        }
+
+        var sorted = mods.OrderBy(Rank).ToList();
+        mods.Clear();
+        foreach (var mod in sorted) mods.Add(mod);
+
+        var temporary = path + ".tmp";
+        File.WriteAllText(temporary, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), Utf8);
+        File.Move(temporary, path, overwrite: true);
     }
 
     public static List<(string Key, bool Enabled)> Merge(IReadOnlyList<string> saved, IReadOnlyList<string> enabled, IEnumerable<string> installed)

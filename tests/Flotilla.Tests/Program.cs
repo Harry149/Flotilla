@@ -48,6 +48,12 @@ Check(!File.Exists(game + ".tmp"), "leaves no temporary file behind");
 var fresh = Path.Combine(temp, "fresh", "modlist.txt");
 new ModList(fresh, Path.Combine(temp, "fresh-order.txt")).Save([("a", true), ("b", true)]);
 Check(File.ReadAllText(fresh) == "a\r\nb", "a new file uses Windows line endings");
+var launcher = Path.Combine(temp, "launched", "Launcher", "launcherdata");
+Directory.CreateDirectory(Path.GetDirectoryName(launcher)!);
+File.WriteAllText(launcher, """{"modList":[{"modName":"a","lastVersion":"1"},{"modName":"other"},{"modName":"B"}],"muted":false}""");
+new ModList(Path.Combine(temp, "launched", "modlist.txt"), Path.Combine(temp, "launched-order.txt")).Save([("b", true), ("a", true)]);
+var launcherText = File.ReadAllText(launcher);
+Check(launcherText.IndexOf("\"B\"") < launcherText.IndexOf("\"a\"") && launcherText.IndexOf("\"a\"") < launcherText.IndexOf("\"other\"") && launcherText.Contains("lastVersion") && launcherText.Contains("muted"), "the launcher's own list is put in the same order, keeping its other data");
 
 Console.WriteLine("BBCode");
 var bold = BBCode.Parse("[b]Bold[/b] text");

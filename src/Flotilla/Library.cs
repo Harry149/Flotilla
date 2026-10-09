@@ -419,7 +419,7 @@ public sealed class Library : Observable
 
     static bool GameIsRunning()
     {
-        var processes = Process.GetProcessesByName("UBOAT");
+        var processes = Process.GetProcessesByName("UBOAT").Concat(Process.GetProcessesByName("UBOAT Launcher")).ToArray();
         foreach (var process in processes) process.Dispose();
         return processes.Length > 0;
     }
