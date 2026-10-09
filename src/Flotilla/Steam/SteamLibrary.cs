@@ -21,7 +21,6 @@ public static class SteamLibrary
             .FirstOrDefault(Directory.Exists);
     }
 
-    // The manifest of each mod Steam keeps for a subscription, from Steam's record next to its Workshop folder.
     public static Dictionary<ulong, ulong> Manifests() =>
         WorkshopFolder() is { } folder
             ? SteamCmd.Manifests(SteamCmd.ReadText(Path.Combine(folder, "..", "..", $"appworkshop_{Workshop.AppId}.acf")))

@@ -204,7 +204,6 @@ public static class BbDocument
 
         static async Task Show(Image image, string url) => image.Source = await Images.Load(url, 1200);
 
-        // A YouTube embed: the video's thumbnail with a play button, opening the video in the browser.
         void Video(BbNode node)
         {
             if (BBCode.YouTubeId(node) is not { } id) return;
@@ -241,7 +240,6 @@ public static class BbDocument
             };
             frame.MouseLeftButtonUp += (_, _) => Shell.Open(watch);
 
-            // As wide as the text, up to 640, and 16:9, which also crops the black bars YouTube puts on its thumbnails.
             var slot = new Border { Child = frame };
             slot.SizeChanged += (_, e) =>
             {

@@ -76,7 +76,6 @@ public sealed class SteamCmd(string root)
         }
     }
 
-    // Downloads one exact version of a Workshop item by its manifest and puts it in target, replacing what's there.
     public async Task<string?> DownloadVersionAsync(ulong id, ulong manifest, long size, string target, IProgress<double> progress, CancellationToken cancel = default)
     {
         await busy.WaitAsync(cancel);
@@ -182,7 +181,6 @@ public sealed class SteamCmd(string root)
 
     public Dictionary<ulong, DateTime> InstalledVersions() => Versions(ReadText(Record));
 
-    // The manifest of each mod SteamCMD put in the Mods folder. A version picked by an import wins over SteamCMD's own record.
     public Dictionary<ulong, ulong> InstalledManifests()
     {
         var manifests = Manifests(ReadText(Record));

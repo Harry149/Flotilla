@@ -78,10 +78,7 @@ public sealed class Library : Observable
             {
                 if (await featured.ReadAsync() is { } ids && !ids.SequenceEqual(FeaturedIds)) FeaturedIds = ids;
             }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
-            {
-                // Offline or rate limited: keep what's showing and try again next minute.
-            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
         } while (await timer.WaitForNextTickAsync());
     }
 
@@ -189,8 +186,6 @@ public sealed class Library : Observable
         Status.Say(mods.Count == 1 ? "Exported 1 mod." : $"Exported {mods.Count} mods, in load order.");
     }
 
-    // Installs every mod in an exported list at its exported version, then switches on exactly those mods in the list's order.
-    // Other mods stay installed, switched off.
     public async Task ImportAsync(string path)
     {
         if (Importing) return;
@@ -241,7 +236,6 @@ public sealed class Library : Observable
                     continue;
                 }
 
-                // A Steam subscription is already installed, and Steam decides its version.
                 if (found.ContainsKey(ModFolder.SteamPrefix + id))
                 {
                     keys.Add(ModFolder.SteamPrefix + id);

@@ -10,7 +10,6 @@ namespace Flotilla.Views;
 
 public sealed record HeroDot(int Index, bool Current);
 
-// The banner at the top of the Workshop: the featured mods in turn, or the most subscribed mod when none are featured.
 public sealed class HeroRow(IReadOnlyList<ModTile> tiles, bool featured) : Observable
 {
     public IReadOnlyList<ModTile> Tiles { get; } = tiles;
@@ -120,13 +119,11 @@ public partial class WorkshopView : UserControl
 
     void OnRetry(object sender, RoutedEventArgs e) => RetryRequested?.Invoke();
 
-    // Hold the banner still while the pointer is on it, so it doesn't change under a click.
     void OnHeroEnter(object sender, MouseEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is HeroRow row) row.Paused = true;
     }
 
-    // Leave can arrive after the row has been recycled by scrolling, when it no longer holds the banner.
     void OnHeroLeave(object sender, MouseEventArgs e)
     {
         if (hero is not null) hero.Paused = false;
@@ -187,7 +184,6 @@ public partial class WorkshopView : UserControl
         Rows.ItemsSource = rows;
     }
 
-    // Keeps the same banner across refreshes (resizing, sorting) so the rotation doesn't jump back to the start.
     HeroRow Hero(Library library)
     {
         var byId = library.Tiles.ToDictionary(t => t.Id);

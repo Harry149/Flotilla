@@ -30,7 +30,6 @@ public sealed class ModList(string gameFile, string orderFile)
         SortLauncher(all.Select(m => m.Key).ToList());
     }
 
-    // The UBOAT launcher keeps its own copy of the order and rewrites modlist.txt from it on start, so it has to match.
     void SortLauncher(List<string> keys)
     {
         var path = Path.Combine(Path.GetDirectoryName(gameFile)!, "Launcher", "launcherdata");

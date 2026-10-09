@@ -31,7 +31,6 @@ public static class BBCode
         "quote", "code", "hr", "spoiler", "noparse", "table", "tr", "td", "th", "previewyoutube",
     ];
 
-    // [previewyoutube=8I__6lKNi5w;full][/previewyoutube] names the video before the ';' (the rest is Steam's layout hint).
     public static string? YouTubeId(BbNode node)
     {
         var id = (node.Value ?? node.PlainText).Split(';')[0].Trim();

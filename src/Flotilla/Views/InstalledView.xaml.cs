@@ -108,8 +108,6 @@ public partial class InstalledView : UserControl
         e.Handled = true;
     }
 
-    // Dragging a row: it follows the pointer up and down, the rows it passes slide out of its way,
-    // and on release it settles into its slot before the load order is saved.
     sealed class Drag(InstalledMod mod, ListBoxItem item, int from, double step, double startY)
     {
         public InstalledMod Mod { get; } = mod;
