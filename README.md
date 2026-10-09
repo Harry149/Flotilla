@@ -41,7 +41,7 @@ Flotilla rewrites that file whenever you change something, keeping its line endi
 
 **Uninstalling** deletes the mod's folder for anything in the Mods folder. A Steam subscription can only be removed by Steam, so for those the button opens the mod in Steam, where you unsubscribe.
 
-Changes are refused while `UBOAT.exe` is running, because the game reads and rewrites `modlist.txt` itself. Play UBOAT in the sidebar starts the game through Steam.
+Changes are refused while `Flotilla.exe` is running, because the game reads and rewrites `modlist.txt` itself. Play UBOAT in the sidebar starts the game through Steam.
 
 ## Limits
 
