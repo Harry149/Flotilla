@@ -14,7 +14,7 @@ public sealed class BbNode(string tag, string? value = null)
     public string Prose => Tag switch
     {
         "" => Value ?? "",
-        "img" or "hr" or "code" or "table" or "h1" or "h2" or "h3" => " ",
+        "img" or "hr" or "code" or "table" or "h1" or "h2" or "h3" or "previewyoutube" => " ",
         "url" when Value is null => " ",
         "*" => string.Concat(Children.Select(c => c.Prose)) + " ",
         _ => string.Concat(Children.Select(c => c.Prose)),
@@ -28,8 +28,15 @@ public static class BBCode
     static readonly HashSet<string> Known =
     [
         "b", "i", "u", "strike", "h1", "h2", "h3", "url", "img", "list", "olist", "*",
-        "quote", "code", "hr", "spoiler", "noparse", "table", "tr", "td", "th",
+        "quote", "code", "hr", "spoiler", "noparse", "table", "tr", "td", "th", "previewyoutube",
     ];
+
+    // [previewyoutube=8I__6lKNi5w;full][/previewyoutube] names the video before the ';' (the rest is Steam's layout hint).
+    public static string? YouTubeId(BbNode node)
+    {
+        var id = (node.Value ?? node.PlainText).Split(';')[0].Trim();
+        return Regex.IsMatch(id, "^[A-Za-z0-9_-]{6,20}$") ? id : null;
+    }
 
     public static BbNode Parse(string source)
     {

@@ -27,6 +27,7 @@ public sealed class Library : Observable
     public StatusLine Status { get; } = new();
     public ObservableCollection<InstalledMod> Installed { get; } = [];
     public IReadOnlyList<ModTile> Tiles { get; private set => Set(ref field, value); } = [];
+    public IReadOnlyList<ulong> FeaturedIds { get; private set => Set(ref field, value); } = [];
     public string? WorkshopError { get; private set => Set(ref field, value); }
     public string InstalledSummary { get; private set => Set(ref field, value); } = "";
     public int UpdateCount { get; private set => Set(ref field, value); }
@@ -44,6 +45,7 @@ public sealed class Library : Observable
     {
         Show(Workshop.Load(catalogue));
         Reload();
+        _ = WatchFeaturedAsync();
         await RefreshWorkshopAsync();
 
         if (UpdateCount > 0)
@@ -64,6 +66,23 @@ public sealed class Library : Observable
             WorkshopError = e.Message;
             Status.Warn($"Couldn't read the Steam Workshop: {e.Message}");
         }
+    }
+
+    async Task WatchFeaturedAsync()
+    {
+        var featured = new Featured(Web.Client);
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        do
+        {
+            try
+            {
+                if (await featured.ReadAsync() is { } ids && !ids.SequenceEqual(FeaturedIds)) FeaturedIds = ids;
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+            {
+                // Offline or rate limited: keep what's showing and try again next minute.
+            }
+        } while (await timer.WaitForNextTickAsync());
     }
 
     public void Install(ModTile tile)

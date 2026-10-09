@@ -1,12 +1,39 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Flotilla.UI;
 
 namespace Flotilla.Views;
 
-public sealed record HeroRow(ModTile Tile);
+public sealed record HeroDot(int Index, bool Current);
+
+// The banner at the top of the Workshop: the featured mods in turn, or the most subscribed mod when none are featured.
+public sealed class HeroRow(IReadOnlyList<ModTile> tiles, bool featured) : Observable
+{
+    public IReadOnlyList<ModTile> Tiles { get; } = tiles;
+    public string Label { get; } = featured ? "Featured" : "Most subscribed on the Workshop";
+    public ModTile Tile => Tiles[Index];
+    public IReadOnlyList<HeroDot> Dots => Tiles.Count < 2 ? [] : [.. Tiles.Select((_, i) => new HeroDot(i, i == Index))];
+    public bool Paused { get; set; }
+
+    int Index
+    {
+        get;
+        set
+        {
+            if (!Set(ref field, value)) return;
+            Raise(nameof(Tile));
+            Raise(nameof(Dots));
+        }
+    }
+
+    public void Next() => Index = (Index + 1) % Tiles.Count;
+
+    public void Show(int index) => Index = index;
+}
 
 public sealed record SectionRow(string Title, string Count, string Sort)
 {
@@ -29,10 +56,17 @@ public partial class WorkshopView : UserControl
     string query = "";
     string sort = "popular";
     int columns = 4;
+    HeroRow? hero;
+    readonly DispatcherTimer rotate = new() { Interval = TimeSpan.FromSeconds(8) };
 
     public WorkshopView()
     {
         InitializeComponent();
+        rotate.Tick += (_, _) =>
+        {
+            if (hero is { Paused: false }) hero.Next();
+        };
+        rotate.Start();
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is Library old) old.PropertyChanged -= OnLibraryChanged;
@@ -57,7 +91,7 @@ public partial class WorkshopView : UserControl
 
     void OnLibraryChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(Library.Tiles) or nameof(Library.WorkshopError)) Refresh();
+        if (e.PropertyName is nameof(Library.Tiles) or nameof(Library.WorkshopError) or nameof(Library.FeaturedIds)) Refresh();
     }
 
     void OnSort(object sender, RoutedEventArgs e)
@@ -85,6 +119,23 @@ public partial class WorkshopView : UserControl
     void OnHeroInstall(object sender, RoutedEventArgs e) => Raise(InstallRequested, sender);
 
     void OnRetry(object sender, RoutedEventArgs e) => RetryRequested?.Invoke();
+
+    // Hold the banner still while the pointer is on it, so it doesn't change under a click.
+    void OnHeroEnter(object sender, MouseEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is HeroRow row) row.Paused = true;
+    }
+
+    // Leave can arrive after the row has been recycled by scrolling, when it no longer holds the banner.
+    void OnHeroLeave(object sender, MouseEventArgs e)
+    {
+        if (hero is not null) hero.Paused = false;
+    }
+
+    void OnHeroDot(object sender, RoutedEventArgs e)
+    {
+        if (hero is not null && ((FrameworkElement)sender).DataContext is HeroDot dot) hero.Show(dot.Index);
+    }
 
     void OnHeroSized(object sender, SizeChangedEventArgs e) =>
         ((FrameworkElement)sender).Clip = new RectangleGeometry(new Rect(e.NewSize), 10, 10);
@@ -122,7 +173,7 @@ public partial class WorkshopView : UserControl
         var rows = new List<object>();
         if (query.Length == 0)
         {
-            rows.Add(new HeroRow(all.MaxBy(t => t.Item.Subscribers)!));
+            rows.Add(Hero(library));
             rows.Add(new SectionRow("All mods", $"{tiles.Count:N0} mods", sort));
         }
         else
@@ -134,5 +185,16 @@ public partial class WorkshopView : UserControl
         if (tiles.Count == 0) rows.Add(new MessageRow($"Nothing matches “{query}”", "Try part of the name, or a tag such as Crew or Graphics."));
 
         Rows.ItemsSource = rows;
+    }
+
+    // Keeps the same banner across refreshes (resizing, sorting) so the rotation doesn't jump back to the start.
+    HeroRow Hero(Library library)
+    {
+        var byId = library.Tiles.ToDictionary(t => t.Id);
+        var featured = library.FeaturedIds.Select(byId.GetValueOrDefault).OfType<ModTile>().ToList();
+        List<ModTile> picks = featured.Count > 0 ? featured : [library.Tiles.MaxBy(t => t.Item.Subscribers)!];
+
+        if (hero is null || !hero.Tiles.SequenceEqual(picks)) hero = new HeroRow(picks, featured.Count > 0);
+        return hero;
     }
 }

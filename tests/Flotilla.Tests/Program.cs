@@ -55,6 +55,10 @@ new ModList(Path.Combine(temp, "launched", "modlist.txt"), Path.Combine(temp, "l
 var launcherText = File.ReadAllText(launcher);
 Check(launcherText.IndexOf("\"B\"") < launcherText.IndexOf("\"a\"") && launcherText.IndexOf("\"a\"") < launcherText.IndexOf("\"other\"") && launcherText.Contains("lastVersion") && launcherText.Contains("muted"), "the launcher's own list is put in the same order, keeping its other data");
 
+Console.WriteLine("Featured");
+Check(Flotilla.Featured.Parse("# notes\r\n3814892328\n  3744719470  # Living Depths\n\nnot an id\n3814892328\n").SequenceEqual([3814892328UL, 3744719470UL]), "reads IDs in order, skipping notes, blanks, junk and repeats");
+Check(Flotilla.Featured.Parse("").Count == 0, "an empty file features nothing");
+
 Console.WriteLine("BBCode");
 var bold = BBCode.Parse("[b]Bold[/b] text");
 Check(bold.Children.Count == 2 && bold.Children[0].Tag == "b" && bold.Children[0].PlainText == "Bold" && bold.Children[1].Value == " text", "bold and text");
@@ -67,6 +71,9 @@ var link = BBCode.Parse("[url=\"https://example.com/a\"]Site[/url]").Children[0]
 Check(link.Tag == "url" && link.Value == "https://example.com/a" && link.PlainText == "Site", "link with a quoted target");
 Check(BBCode.Parse("[IMG]https://x/y.png[/IMG]").Children[0] is { Tag: "img", PlainText: "https://x/y.png" }, "tags are case-insensitive");
 Check(BBCode.Parse("[s]old[/s]").Children[0].Tag == "strike", "[s] is strike");
+var video = BBCode.Parse("[previewyoutube=8I__6lKNi5w;full][/previewyoutube]");
+Check(video.Children.Count == 1 && BBCode.YouTubeId(video.Children[0]) == "8I__6lKNi5w" && video.PlainText == "", "a YouTube embed becomes a video, not text");
+Check(BBCode.YouTubeId(BBCode.Parse("[previewyoutube=\"><script>;full][/previewyoutube]").Children[0]) is null, "a malformed video ID is ignored");
 var tangled = BBCode.Parse("[b][i]x[/b]y[/i]");
 Check(tangled.Children[0].Tag == "b" && tangled.PlainText == "xy[/i]", "a mis-nested close shuts the inner tag as well");
 var real = BBCode.Parse("[img]https://i.imgur.com/a.gif[/img]\r\n\r\n[h1]USING THE MOD? PLEASE RATE IT[/h1]\r\nA [url=https://a.b][b]link[/b][/url].\r\n[list]\r\n[*][b]Host[/b] - pick a save.\r\n[*]Join[/list][hr][/hr][strike]Weed[/strike] fund");

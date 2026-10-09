@@ -53,6 +53,7 @@ public static class BbDocument
                 case "code": Code(node); break;
                 case "hr": Rule(); break;
                 case "img": Picture(node.Value ?? node.PlainText); break;
+                case "previewyoutube": Video(node); break;
                 case "table": Table(node); break;
                 default: Children(node); break;
             }
@@ -202,6 +203,55 @@ public static class BbDocument
         }
 
         static async Task Show(Image image, string url) => image.Source = await Images.Load(url, 1200);
+
+        // A YouTube embed: the video's thumbnail with a play button, opening the video in the browser.
+        void Video(BbNode node)
+        {
+            if (BBCode.YouTubeId(node) is not { } id) return;
+
+            var watch = $"https://www.youtube.com/watch?v={id}";
+            var image = new Image { Stretch = Stretch.UniformToFill, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var play = new Border
+            {
+                Width = 68,
+                Height = 48,
+                CornerRadius = new CornerRadius(12),
+                Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x0B, 0x14, 0x14)),
+                BorderBrush = Resource<Brush>("AccentRing"),
+                BorderThickness = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new System.Windows.Shapes.Path
+                {
+                    Data = Geometry.Parse("M0,0 L16,9 L0,18 Z"),
+                    Fill = Resource<Brush>("Accent"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 0, 0, 0),
+                },
+            };
+            var frame = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Background = Resource<Brush>("Raised"),
+                ClipToBounds = true,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                ToolTip = "Watch on YouTube",
+                Children = { image, play },
+            };
+            frame.MouseLeftButtonUp += (_, _) => Shell.Open(watch);
+
+            // As wide as the text, up to 640, and 16:9, which also crops the black bars YouTube puts on its thumbnails.
+            var slot = new Border { Child = frame };
+            slot.SizeChanged += (_, e) =>
+            {
+                frame.Width = Math.Min(640, e.NewSize.Width);
+                frame.Height = frame.Width * 9 / 16;
+            };
+
+            Block(new BlockUIContainer(slot) { Margin = new Thickness(0, 4, 0, gap) });
+            _ = Show(image, $"https://img.youtube.com/vi/{id}/hqdefault.jpg");
+        }
 
         void Table(BbNode node)
         {
