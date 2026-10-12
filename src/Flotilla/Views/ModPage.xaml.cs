@@ -20,6 +20,24 @@ public partial class ModPage : UserControl
     public event Action? Closed;
     public event Action<ModTile>? InstallRequested;
     public event Action<string>? TagRequested;
+    public event Action<ModTile>? AuthorRequested;
+    public event Action<ModTile>? OpenRequested;
+
+    public void ShowRequirements(IReadOnlyList<RequirementRow> rows)
+    {
+        NeedsList.ItemsSource = rows;
+        Needs.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void OnNeed(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is RequirementRow { Tile: { } tile }) OpenRequested?.Invoke(tile);
+    }
+
+    void OnAuthor(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is ModTile tile) AuthorRequested?.Invoke(tile);
+    }
 
     public string BackLabel
     {

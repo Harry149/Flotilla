@@ -52,6 +52,17 @@ public partial class InstalledView : UserControl
 
     void OnToggle(object sender, RoutedEventArgs e) => Library.Save();
 
+    void OnFix(object sender, RoutedEventArgs e)
+    {
+        if (ModOf(sender) is { } mod) Library.Fix(mod);
+    }
+
+    void OnOpenLog(object sender, RoutedEventArgs e)
+    {
+        if (System.IO.File.Exists(Paths.GameLog)) Shell.Open(Paths.GameLog);
+        else Library.Status.Say("There's no game log yet. UBOAT writes one when it runs.");
+    }
+
     void OnAllOn(object sender, RoutedEventArgs e) => Library.SetAll(true);
 
     void OnAllOff(object sender, RoutedEventArgs e) => Library.SetAll(false);

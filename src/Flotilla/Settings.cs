@@ -14,6 +14,16 @@ public sealed class Settings
     public double Height { get; set; }
     public bool Maximized { get; set; }
 
+    public bool ClearCacheBeforePlay { get; set; } = true;
+    public bool CheckForUpdates { get; set; } = true;
+    public bool InstallRequirements { get; set; } = true;
+    public bool WarnGameVersion { get; set; } = true;
+    public bool CheckGameLog { get; set; } = true;
+    public string? DataFolder { get; set; }
+    public string? GameVersion { get; set; }
+    public DateTime LogChecked { get; set; }
+    public List<ulong> Favourites { get; set; } = [];
+
     public static Settings Load()
     {
         try

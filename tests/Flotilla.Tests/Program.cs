@@ -1,3 +1,4 @@
+using Flotilla;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Flotilla.Mods;
@@ -74,6 +75,53 @@ File.WriteAllText(profilesFile, "not json");
 Check(ProfileStore.Load(profilesFile).Count == 0, "a broken profiles file means no profiles, not a crash");
 Check(ProfileStore.Load(Path.Combine(temp, "none.json")).Count == 0, "no profiles file means no profiles");
 
+Console.WriteLine("Requirements");
+var page = """
+    <div class="requiredItemsContainer" id="RequiredItems"> <a href="https://steamcommunity.com/workshop/filedetails/?id=2898164268" target="_blank"> <div class="requiredItem"> [2026.1] Shared Bundles </div> </a>
+    <a href="https://steamcommunity.com/workshop/filedetails/?id=2892964674"> <div class="requiredItem"> German Aircraft </div> </a> </div> </div> <!-- created by -->
+    <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=999">Another item further down</a>
+    """;
+Check(Requirements.Parse(page).SequenceEqual([2898164268UL, 2892964674UL]), "required items from a Workshop page, and nothing past them");
+Check(Requirements.Parse("<a href=\"https://steamcommunity.com/sharedfiles/filedetails/?id=5\">x</a>").Count == 0, "a page without required items needs nothing");
+var requirementsFile = Path.Combine(temp, "requirements.json");
+Requirements.Save(requirementsFile, new() { [7] = new([1, 2], new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc)) });
+Check(Requirements.Load(requirementsFile)[7].Ids.SequenceEqual([1UL, 2UL]), "required items are cached and read back");
+
+Console.WriteLine("Game log");
+var log = GameLog.Parse([
+    @"C:\Users\x\AppData\LocalLow\Deep Water Studio\UBOAT\Mods\3815285055\Source\MpMenuTab.Language.cs(31,23): error CS1501: No overload for method 'OpenPage' takes 2 arguments",
+    @"C:\Users\x\AppData\LocalLow\Deep Water Studio\UBOAT\Mods\3815285055\Source\NzoUniformCompat.cs(807,13): warning CS0162: Unreachable code detected",
+    @"C:\Users\x\AppData\LocalLow\Deep Water Studio\UBOAT\Mods\3815285055\Source\MpMenuTab.Language.cs(31,23): error CS1501: No overload for method 'OpenPage' takes 2 arguments",
+    "Game version: 2026.1 Patch 21",
+    @"D:\SteamLibrary\steamapps\workshop\content\494840\2114304535\Source\Patch.cs(5,1): error CS0246: The type 'Foo' could not be found",
+    "NullReferenceException: Object reference not set to an instance of an object",
+    @"[NoseDown] config loaded from C:/Users/x/AppData/LocalLow/Deep Water Studio/UBOAT\NoseDownConfig.txt",
+]);
+Check(log.GameVersion == "2026.1 Patch 21", "reads the game version");
+Check(log.Errors["3815285055"].SequenceEqual(["it failed to compile (CS1501: No overload for method 'OpenPage' takes 2 arguments)"]), "a compile error is pinned on its mod once, and warnings are ignored");
+Check(log.Errors.ContainsKey("steam:2114304535"), "an error in a Steam subscription is pinned on it");
+Check(log.Errors.Count == 2 && log.Unattributed == 1, "errors that don't name a mod are only counted");
+Check(GameLog.Supports(["2026.1"], "2026.1 Patch 21") && GameLog.Supports(["2026.1 patch 18", "2026.1 Patch 21"], "2026.1 Patch 21"), "a mod for this release or this exact patch is fine");
+Check(!GameLog.Supports(["2024.1 (Full Release)"], "2026.1 Patch 21") && !GameLog.Supports(["2026.1 Patch 15"], "2026.1 Patch 21"), "a mod only for another release or patch is flagged");
+Check(GameLog.Supports([], "2026.1 Patch 21"), "a mod that names no version isn't flagged");
+
+Console.WriteLine("Updates");
+Check(Updater.IsNewer("0.1.3", "0.1.2") && Updater.IsNewer("0.2", "0.1.9") && Updater.IsNewer("1.0.0", "0.9.9"), "a higher version is newer");
+Check(Updater.IsNewer("0.1.1b", "0.1.1") && Updater.IsNewer("0.1.2", "0.1.1b") && !Updater.IsNewer("0.1.1b", "0.1.2"), "a lettered hotfix sits between versions");
+Check(!Updater.IsNewer("0.1.2", "0.1.2") && !Updater.IsNewer("0.1.1", "0.1.2") && !Updater.IsNewer("0.1.10", "0.1.10"), "the same or an older version isn't newer");
+Check(Updater.IsNewer("0.1.10", "0.1.9"), "versions compare as numbers, not text");
+Check(Updater.VersionIn("V0.1.2") == "0.1.2" && Updater.VersionIn("v0.1.1b") == "0.1.1b" && Updater.VersionIn("Flotilla 1.4 beta") == "1.4" && Updater.VersionIn("V012") is null, "the version in a release name");
+var release = Updater.Parse("""
+    {"tag_name":"V013","name":"V0.1.3","draft":false,"prerelease":false,"html_url":"https://github.com/Harry149/Flotilla/releases/tag/V013",
+     "body":"- Mod authors\r\n","assets":[
+       {"name":"notes.txt","size":3,"browser_download_url":"https://x/notes.txt"},
+       {"name":"Flotilla.exe","size":140067886,"digest":"sha256:cd105244c91c3d8cebe424ef04d736815cdfafe347ee7ab0eb585a78eb725e3a","browser_download_url":"https://x/Flotilla.exe"}]}
+    """);
+Check(release is { Version: "0.1.3", Notes: "- Mod authors", Size: 140067886, Download: "https://x/Flotilla.exe", Sha256: "cd105244c91c3d8cebe424ef04d736815cdfafe347ee7ab0eb585a78eb725e3a" }, "reads the latest release and its Flotilla.exe");
+Check(Updater.Parse("""{"name":"V0.2.0","prerelease":true,"assets":[{"name":"Flotilla.exe","size":1}]}""") is null, "a pre-release isn't offered");
+Check(Updater.Parse("""{"name":"V0.2.0","assets":[{"name":"Other.zip","size":1}]}""") is null, "a release without Flotilla.exe isn't offered");
+Check(Updater.Parse("""{"name":"V0.2.0","assets":[{"name":"Flotilla.exe","size":1}]}""") is { Sha256: null }, "a release without a checksum still works");
+
 Console.WriteLine("Featured");
 Check(Flotilla.Featured.Parse("# notes\r\n3814892328\n  3744719470  # Living Depths\n\nnot an id\n3814892328\n").SequenceEqual([3814892328UL, 3744719470UL]), "reads IDs in order, skipping notes, blanks, junk and repeats");
 Check(Flotilla.Featured.Parse("").Count == 0, "an empty file features nothing");
@@ -132,7 +180,7 @@ var details = Workshop.ParseDetails("""
     {"response":{"result":1,"resultcount":4,"publishedfiledetails":[
       {"publishedfileid":"3815285055","result":1,"consumer_app_id":494840,"title":" Uboats: Coop Multiplayer ","description":"[h1]Hi[/h1]",
        "preview_url":"https://images.steamusercontent.com/ugc/1/A/","file_size":"7340032","time_created":1727000000,"time_updated":1759000000,
-       "subscriptions":12850,"banned":0,"tags":[{"tag":"Gameplay"},{"tag":"2026.1"}],"hcontent_file":"18446744073709551000"},
+       "subscriptions":12850,"banned":0,"tags":[{"tag":"Gameplay"},{"tag":"2026.1"}],"hcontent_file":"18446744073709551000","creator":"76561198023548424"},
       {"publishedfileid":"1","result":1,"consumer_app_id":294100,"title":"RimWorld mod"},
       {"publishedfileid":"2","result":9},
       {"publishedfileid":"3","result":1,"consumer_app_id":494840,"title":"Banned","banned":true}
@@ -142,7 +190,11 @@ Check(details.Count == 1, "keeps only live UBOAT items");
 Check(details[0] is { Id: 3815285055, Title: "Uboats: Coop Multiplayer", Size: 7340032, Subscribers: 12850 } && details[0].Tags.SequenceEqual(["Gameplay", "2026.1"]), "reads fields given as numbers or strings");
 Check(details[0].Updated == DateTimeOffset.FromUnixTimeSeconds(1759000000).UtcDateTime, "reads the update time");
 Check(details[0].Manifest == 18446744073709551000, "reads the current version's manifest, even past the range of a long");
-Check(Workshop.ParseDetails("""{"response":{"publishedfiledetails":[{"publishedfileid":"5","result":1,"consumer_app_id":494840}]}}""")[0].Manifest == 0, "no manifest given is 0");
+Check(details[0].Creator == 76561198023548424, "reads the author's Steam ID");
+Check(Workshop.ParseDetails("""{"response":{"publishedfiledetails":[{"publishedfileid":"5","result":1,"consumer_app_id":494840}]}}""")[0] is { Manifest: 0, Creator: 0 }, "no manifest or author given is 0");
+Check(SteamProfiles.ParseName("<profile><steamID64>7656</steamID64>\n<steamID><![CDATA[Pingu]]></steamID></profile>") == "Pingu", "an author's name from their profile");
+Check(SteamProfiles.ParseName("<steamID>Tom &amp; Jerry</steamID>") == "Tom & Jerry", "an author's name without CDATA is decoded");
+Check(SteamProfiles.ParseName("<response><error>The specified profile could not be found.</error></response>") is null, "a missing profile has no name");
 Check(Workshop.ParseDetails("""{"response":{"result":1}}""").Count == 0, "an empty answer is no items, not a crash");
 var cache = Path.Combine(temp, "workshop.json");
 Workshop.Save(cache, details);

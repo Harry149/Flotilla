@@ -505,6 +505,35 @@
         </Setter>
     </Style>
 
+    <Style x:Key="StarToggle" TargetType="ToggleButton">
+        <Setter Property="Width" Value="30"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="ToolTip" Value="Add to favourites"/>
+        <Setter Property="AutomationProperties.Name" Value="Favourite"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Face" CornerRadius="15" Background="{StaticResource Badge}">
+                        <Path x:Name="Star" Data="{StaticResource IconStar}" Style="{StaticResource Icon}" Stroke="{StaticResource Soft}" Fill="Transparent"
+                              Width="15" Height="15" StrokeThickness="1.6"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Star" Property="Stroke" Value="{StaticResource Warn}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Star" Property="Stroke" Value="{StaticResource Warn}"/>
+                            <Setter TargetName="Star" Property="Fill" Value="{StaticResource Warn}"/>
+                            <Setter Property="ToolTip" Value="Remove from favourites"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="CardButton" TargetType="Button">
         <Setter Property="Foreground" Value="{StaticResource Text}"/>
         <Setter Property="Margin" Value="9,0,9,18"/>
@@ -544,6 +573,9 @@
                                     </StackPanel>
                                 </Border>
 
+                                <ToggleButton x:Name="Star" Style="{StaticResource StarToggle}" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                              IsChecked="{Binding IsFavourite}" Visibility="Hidden"/>
+
                                 <StackPanel Grid.Row="1" Margin="14,12,14,14">
                                     <TextBlock Text="{Binding Title}" FontFamily="{StaticResource Display}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                     <Grid Margin="0,9,0,0">
@@ -574,6 +606,12 @@
                                 </Setter.Value>
                             </Setter>
                         </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Star" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <DataTrigger Binding="{Binding IsFavourite}" Value="True">
+                            <Setter TargetName="Star" Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
                         <DataTrigger Binding="{Binding Badge}" Value="{x:Null}">
                             <Setter TargetName="Badge" Property="Visibility" Value="Collapsed"/>
                         </DataTrigger>

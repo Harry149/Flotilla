@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Flotilla.Mods;
 
 namespace Flotilla.Steam;
 
@@ -57,6 +58,9 @@ public sealed class Workshop(HttpClient http)
         return items;
     }
 
+    public async Task<List<ulong>> RequirementsAsync(ulong id, CancellationToken cancel = default) =>
+        Requirements.Parse(await Retry(() => http.GetStringAsync($"https://steamcommunity.com/sharedfiles/filedetails/?id={id}", cancel), cancel), id);
+
     public static IEnumerable<ulong> ParseIds(string html) =>
         ItemLink.Matches(html).Select(m => ulong.Parse(m.Groups[1].Value));
 
@@ -86,7 +90,8 @@ public sealed class Workshop(HttpClient http)
                 Time(item.Number("time_updated")),
                 (int)item.Number("subscriptions"),
                 tags,
-                ulong.TryParse(item.Text("hcontent_file"), out var manifest) ? manifest : 0));
+                ulong.TryParse(item.Text("hcontent_file"), out var manifest) ? manifest : 0,
+                ulong.TryParse(item.Text("creator"), out var creator) ? creator : 0));
         }
         return items;
     }
@@ -118,7 +123,7 @@ public sealed class Workshop(HttpClient http)
             }
             catch (HttpRequestException e) when (attempt < 3 && e.StatusCode is null or HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError)
             {
-                await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancel);
+                await Task.Delay(TimeSpan.FromSeconds(attempt * (e.StatusCode == HttpStatusCode.TooManyRequests ? 10 : 2)), cancel);
             }
         }
     }

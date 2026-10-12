@@ -41,6 +41,7 @@
     <SolidColorBrush x:Key="TagText" Color="#8FD8C8"/>
     <SolidColorBrush x:Key="Mark" Color="#0C2A2C"/>
 
+    <SolidColorBrush x:Key="Warn" Color="#F2C46D"/>
     <SolidColorBrush x:Key="Danger" Color="#FF8C7F"/>
     <SolidColorBrush x:Key="DangerBack" Color="#29FF7869"/>
     <SolidColorBrush x:Key="CloseHover" Color="#C42B1C"/>

@@ -10,4 +10,5 @@ public sealed record WorkshopItem(
     DateTime Updated,
     int Subscribers,
     string[] Tags,
-    ulong Manifest = 0);
+    ulong Manifest = 0,
+    ulong Creator = 0);

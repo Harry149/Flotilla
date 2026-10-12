@@ -41,6 +41,20 @@ Flotilla rewrites that file whenever you change something, keeping its line endi
 
 **Profiles** save which mods are switched on and their load order, under a name, in `%LOCALAPPDATA%\Flotilla\profiles.json`. Press + next to Profiles in the sidebar to save the current setup, and click a profile to switch to it: its mods are switched on in its order and everything else is switched off. A Workshop mod in the profile that isn't installed is installed first and slotted into place. A mod saved from Flotilla matches the same mod subscribed in Steam, and the other way round. Right-click a profile to update it with the mods that are on now, rename, reorder or delete it.
 
+**Required mods** come from the "Required items" list on each mod's Workshop page, cached for three days in `%LOCALAPPDATA%\Flotilla\requirements.json`. Installing a mod installs what it needs and loads those first. On Installed, a mod whose requirement is missing, switched off or loads after it gets a yellow note and a Fix button. A mod's page lists what it needs.
+
+**Version and error warnings.** UBOAT writes its version (`Game version: 2026.1 Patch 21`) at the top of `output_log.txt`. A mod whose manifest names neither that release (`2026.1`) nor that exact patch gets a note, like the launcher's "outdated!". When you come back from a game, Flotilla reads the log and marks mods that failed to compile (`...\Mods\<mod>\Source\File.cs(31,23): error CS1501`) or logged an error from their own folder. Errors in a mod that's been updated since are ignored.
+
+**Play UBOAT** empties UBOAT's `Cache`, `Temp` and `Data Sheets` folders first (textures, compiled mod code and compiled data sheets, which the game rebuilds), so leftovers from old or removed mods can't come back. Turn it off in Settings.
+
+**Settings** holds the switches for all of the above, update checks, a different UBOAT data folder, and shortcuts to the data, Mods and Flotilla folders and the game log. Favourites (the star on a mod) are kept there too.
+
+**Updating Flotilla itself** happens on launch: Flotilla asks GitHub for the latest release of this repo, and if its version is newer than the one running, it offers to update. Saying yes downloads that release's `Flotilla.exe`, checks its size and SHA-256 against what GitHub reports, swaps it in place of the running copy (the old one is kept as `Flotilla.exe.old` until the next start) and restarts. Drafts and pre-releases are never offered. To ship an update:
+
+1. Raise `<Version>` in `src/Flotilla/Flotilla.csproj`, for example to `0.1.3`.
+2. Publish `Flotilla.exe` with the command above.
+3. Make a GitHub release whose name contains that version, like `V0.1.3` (a letter for a hotfix such as `v0.1.3b` counts as newer than `0.1.3`), and attach the exe named exactly `Flotilla.exe`. The release notes are shown in the update prompt.
+
 **Help** is the ? button at the top right or How Flotilla works at the bottom of the sidebar (or F1). It opens a short tour, which also shows the first time Flotilla starts. Other shortcuts: Ctrl+F searches (Browse, or the Installed list when that's open), Ctrl+1 and Ctrl+2 switch tabs, F5 refreshes the Workshop list, and Alt with the arrow keys moves a mod in the load order.
 
 **Uninstalling** deletes the mod's folder for anything in the Mods folder. A Steam subscription can only be removed by Steam, so for those the button opens the mod in Steam, where you unsubscribe.

@@ -12,11 +12,15 @@ public sealed record Fact(string Label, string Value);
 public sealed class ModTile : Observable
 {
     static readonly Regex Spaces = new(@"\s+", RegexOptions.Compiled);
+    static readonly SteamProfiles Profiles = new(Web.Client);
 
     readonly LazyImage thumbnail;
     readonly LazyImage preview;
     readonly LazyImage blur;
     string? summary;
+    string? author;
+    bool lookingUp;
+    bool favourite;
 
     public ModTile(WorkshopItem item)
     {
@@ -40,6 +44,38 @@ public sealed class ModTile : Observable
     public ImageSource? Blur => blur.Value;
 
     public string Summary => summary ??= Shorten(Spaces.Replace(BBCode.Parse(Item.Description).Prose, " ").Trim(), 190);
+
+    public static event Action<ModTile>? FavouriteChanged;
+
+    public bool IsFavourite
+    {
+        get => favourite;
+        set
+        {
+            if (!Set(ref favourite, value)) return;
+            FavouriteChanged?.Invoke(this);
+        }
+    }
+
+    public void LoadFavourite(bool value) => Set(ref favourite, value, nameof(IsFavourite));
+
+    public bool HasAuthor => Item.Creator != 0;
+
+    public string Author
+    {
+        get
+        {
+            if (author is null && !lookingUp && HasAuthor) _ = LookUpAuthorAsync();
+            return author ?? "this author";
+        }
+    }
+
+    async Task LookUpAuthorAsync()
+    {
+        lookingUp = true;
+        author = await Profiles.NameAsync(Item.Creator);
+        if (author is not null) Raise(nameof(Author));
+    }
 
     public TileState State { get; private set; }
     public double Progress { get; private set; }
@@ -89,6 +125,7 @@ public sealed class ModTile : Observable
     {
         Item = item;
         summary = null;
+        if (author is null) lookingUp = false;
         Raise(string.Empty);
     }
 

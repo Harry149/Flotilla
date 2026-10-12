@@ -102,13 +102,25 @@
                     <ColumnDefinition/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="22"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" MaxWidth="420" VerticalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed"
+                               FontWeight="SemiBold" FontSize="22" TextTrimming="CharacterEllipsis"/>
+                    <Button Style="{StaticResource Quiet}" Margin="14,2,0,0" Click="OnClearAuthor" ToolTip="Back to every mod (Esc)"
+                            Visibility="{Binding Clearable, Converter={StaticResource Visible}}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconClose}" Style="{StaticResource Icon}" Width="9" Height="9" StrokeThickness="1.6" Margin="0,0,7,0"/>
+                            <TextBlock Text="Show all mods"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
                     <RadioButton Style="{StaticResource Pill}" Content="Popular" Tag="popular" IsChecked="{Binding Popular, Mode=OneWay}" Click="OnSort"/>
                     <RadioButton Style="{StaticResource Pill}" Content="Recently updated" Tag="updated" IsChecked="{Binding Updated, Mode=OneWay}" Click="OnSort"/>
                     <RadioButton Style="{StaticResource Pill}" Content="Newest" Tag="newest" IsChecked="{Binding Newest, Mode=OneWay}" Click="OnSort"/>
                     <RadioButton Style="{StaticResource Pill}" Content="Name" Tag="name" IsChecked="{Binding ByName, Mode=OneWay}" Click="OnSort"/>
                     <Border Width="1" Height="18" Margin="10,0,12,0" Background="{StaticResource Line}"/>
+                    <ToggleButton Style="{StaticResource PillToggle}" Content="Favourites" IsChecked="{Binding FavouritesOnly, Mode=OneWay}" Click="OnFavouritesOnly"
+                                  ToolTip="Only show mods you starred" Margin="0,0,6,0"/>
                     <ToggleButton Style="{StaticResource PillToggle}" Content="Hide installed" IsChecked="{Binding HideInstalled, Mode=OneWay}" Click="OnHideInstalled"
                                   ToolTip="Only show mods you don't have yet"/>
                 </StackPanel>

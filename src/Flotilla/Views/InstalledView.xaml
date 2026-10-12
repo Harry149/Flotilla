@@ -40,6 +40,12 @@
                             <TextBlock Text="Turn all off"/>
                         </StackPanel>
                     </Button>
+                    <Button Style="{StaticResource Quiet}" Margin="20,0,0,0" Click="OnOpenLog" ToolTip="Open UBOAT's log from your last game">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconLog}" Style="{StaticResource Icon}" Width="13" Height="13" Margin="0,0,7,0"/>
+                            <TextBlock Text="Game log"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </StackPanel>
 
@@ -111,6 +117,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
                         <Border x:Name="Grip" Background="Transparent" Cursor="SizeAll"
@@ -143,10 +150,18 @@
                         <StackPanel x:Name="Label" Grid.Column="3" Margin="0,0,16,0" VerticalAlignment="Center">
                             <TextBlock x:Name="Title" Text="{Binding Name}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15.5"
                                        TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{Binding Details}" Margin="0,3,0,0" FontSize="12.5" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}"/>
+                            <DockPanel x:Name="Note" Margin="0,3,0,0" Background="Transparent" ToolTip="{Binding Details}">
+                                <Path x:Name="NoteIcon" Data="{StaticResource IconWarning}" Style="{StaticResource Icon}" Stroke="{StaticResource Warn}"
+                                      Width="12" Height="12" Margin="0,0,6,0" Visibility="Collapsed"/>
+                                <TextBlock x:Name="NoteText" Text="{Binding Summary}" FontSize="12.5" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}"/>
+                            </DockPanel>
                         </StackPanel>
 
-                        <Button Grid.Column="4" Height="30" Padding="14,0" FontSize="13" Margin="0,0,14,0"
+                        <Button Grid.Column="4" Style="{StaticResource GhostButton}" Height="30" Padding="14,0" FontSize="13" Margin="0,0,14,0"
+                                Content="Fix" Click="OnFix" ToolTip="Install what it needs, switch it on, and load it first"
+                                Visibility="{Binding CanFix, Converter={StaticResource Visible}}"/>
+
+                        <Button Grid.Column="5" Height="30" Padding="14,0" FontSize="13" Margin="0,0,14,0"
                                 Content="{Binding Tile.Action}" IsEnabled="{Binding Tile.CanInstall}" Tag="{Binding Tile.Progress}"
                                 ToolTip="{Binding Tile.UpdateNote}" Click="OnUpdate">
                             <Button.Style>
@@ -169,15 +184,15 @@
                             </Button.Style>
                         </Button>
 
-                        <Border x:Name="Source" Grid.Column="5" VerticalAlignment="Center" Padding="9,2,9,3" CornerRadius="10"
+                        <Border x:Name="Source" Grid.Column="6" VerticalAlignment="Center" Padding="9,2,9,3" CornerRadius="10"
                                 Background="{StaticResource Chip}" ToolTip="{Binding SourceTip}">
                             <TextBlock x:Name="SourceText" Text="{Binding SourceLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Soft}"/>
                         </Border>
 
-                        <ToggleButton Grid.Column="6" Style="{StaticResource Switch}" Margin="20,0,12,0" IsChecked="{Binding Enabled}" Click="OnToggle"
+                        <ToggleButton Grid.Column="7" Style="{StaticResource Switch}" Margin="20,0,12,0" IsChecked="{Binding Enabled}" Click="OnToggle"
                                       AutomationProperties.Name="{Binding Name}" ToolTip="Load this mod when UBOAT starts"/>
 
-                        <Button x:Name="Remove" Grid.Column="7" Style="{StaticResource IconButton}" Margin="0,0,14,0" VerticalAlignment="Center"
+                        <Button x:Name="Remove" Grid.Column="8" Style="{StaticResource IconButton}" Margin="0,0,14,0" VerticalAlignment="Center"
                                 ToolTip="{Binding RemoveTip}" AutomationProperties.Name="{Binding RemoveTip}" Click="OnRemove">
                             <Grid>
                                 <Path x:Name="Bin" Data="{StaticResource IconTrash}" Style="{StaticResource Icon}"/>
@@ -198,6 +213,15 @@
                             <Setter TargetName="Title" Property="Foreground" Value="{StaticResource Danger}"/>
                             <Setter TargetName="Source" Property="Background" Value="{StaticResource DangerBack}"/>
                             <Setter TargetName="SourceText" Property="Foreground" Value="{StaticResource Danger}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Issue, Converter={StaticResource VisibleWhenSet}}" Value="Visible">
+                            <Setter TargetName="NoteIcon" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="NoteText" Property="Foreground" Value="{StaticResource Warn}"/>
+                            <Setter TargetName="Note" Property="ToolTip" Value="{Binding Issue}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsError}" Value="True">
+                            <Setter TargetName="NoteIcon" Property="Stroke" Value="{StaticResource Danger}"/>
+                            <Setter TargetName="NoteText" Property="Foreground" Value="{StaticResource Danger}"/>
                         </DataTrigger>
                         <DataTrigger Binding="{Binding Confirming}" Value="True">
                             <Setter TargetName="Bin" Property="Visibility" Value="Collapsed"/>

@@ -23,6 +23,20 @@ public sealed class InstalledMod(ModFolder folder) : Observable
 
     public bool Confirming { get; set => Set(ref field, value); }
 
+    public string? Issue
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value)) Raise(nameof(Summary));
+        }
+    }
+
+    public bool IsError { get; set => Set(ref field, value); }
+    public bool CanFix { get; set => Set(ref field, value); }
+
+    public string Summary => Issue?.Split('\n')[0] ?? Details;
+
     public string Name => Tile?.Title ?? (Folder.Manifest?.Name is { Length: > 0 } name ? name : Key);
 
     public string Details

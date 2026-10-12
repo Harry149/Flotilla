@@ -34,7 +34,7 @@ public sealed class HeroRow(IReadOnlyList<ModTile> tiles, bool featured) : Obser
     public void Show(int index) => Index = index;
 }
 
-public sealed record SectionRow(string Title, string Count, string Sort, bool HideInstalled)
+public sealed record SectionRow(string Title, string Count, string Sort, bool HideInstalled, bool FavouritesOnly, bool Clearable = false)
 {
     public bool Popular => Sort == "popular";
     public bool Updated => Sort == "updated";
@@ -55,6 +55,9 @@ public partial class WorkshopView : UserControl
     string query = "";
     string sort = "popular";
     bool hideInstalled;
+    bool favouritesOnly;
+    ulong author;
+    string authorName = "";
     int columns = 4;
     HeroRow? hero;
     readonly DispatcherTimer rotate = new() { Interval = TimeSpan.FromSeconds(8) };
@@ -89,9 +92,31 @@ public partial class WorkshopView : UserControl
         Visuals.Find<ScrollViewer>(Rows)?.ScrollToTop();
     }
 
+    public bool ShowsAuthor => author != 0;
+
+    public void ShowAuthor(ulong id, string name)
+    {
+        author = id;
+        authorName = name;
+        Refresh();
+        Visuals.Find<ScrollViewer>(Rows)?.ScrollToTop();
+    }
+
+    public void ClearAuthor()
+    {
+        if (author == 0) return;
+
+        author = 0;
+        Refresh();
+        Visuals.Find<ScrollViewer>(Rows)?.ScrollToTop();
+    }
+
+    void OnClearAuthor(object sender, RoutedEventArgs e) => ClearAuthor();
+
     void OnLibraryChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(Library.Tiles) or nameof(Library.WorkshopError) or nameof(Library.FeaturedIds)) Refresh();
+        if (e.PropertyName is nameof(Library.Tiles) or nameof(Library.WorkshopError) or nameof(Library.FeaturedIds)
+            || e.PropertyName == nameof(Library.FavouriteCount) && favouritesOnly) Refresh();
     }
 
     void OnSort(object sender, RoutedEventArgs e)
@@ -106,6 +131,12 @@ public partial class WorkshopView : UserControl
     void OnHideInstalled(object sender, RoutedEventArgs e)
     {
         hideInstalled = !hideInstalled;
+        Refresh();
+    }
+
+    void OnFavouritesOnly(object sender, RoutedEventArgs e)
+    {
+        favouritesOnly = !favouritesOnly;
         Refresh();
     }
 
@@ -165,7 +196,10 @@ public partial class WorkshopView : UserControl
             return;
         }
 
-        var found = all.Where(t => t.Matches(query) && !(hideInstalled && t.State is TileState.Installed or TileState.Outdated or TileState.Subscribed));
+        var found = all.Where(t => t.Matches(query)
+            && (author == 0 || t.Item.Creator == author)
+            && (!favouritesOnly || t.IsFavourite)
+            && !(hideInstalled && t.State is TileState.Installed or TileState.Outdated or TileState.Subscribed));
         var tiles = (sort switch
         {
             "updated" => found.OrderByDescending(t => t.Item.Updated),
@@ -175,21 +209,27 @@ public partial class WorkshopView : UserControl
         }).ToList();
 
         var rows = new List<object>();
-        if (query.Length == 0)
+        if (author != 0)
+        {
+            rows.Add(new SectionRow($"Mods by {authorName}", tiles.Count == 1 ? "1 mod" : $"{tiles.Count:N0} mods", sort, hideInstalled, favouritesOnly, Clearable: true));
+        }
+        else if (query.Length == 0)
         {
             rows.Add(Hero(library));
-            rows.Add(new SectionRow("All mods", $"{tiles.Count:N0} mods", sort, hideInstalled));
+            rows.Add(new SectionRow("All mods", $"{tiles.Count:N0} mods", sort, hideInstalled, favouritesOnly));
         }
         else
         {
-            rows.Add(new SectionRow("Results", $"{tiles.Count:N0} of {all.Count:N0}", sort, hideInstalled));
+            rows.Add(new SectionRow("Results", $"{tiles.Count:N0} of {all.Count:N0}", sort, hideInstalled, favouritesOnly));
         }
 
         rows.AddRange(tiles.Chunk(columns).Select(chunk => new TileRow(chunk, columns)));
         if (tiles.Count == 0 && query.Length > 0)
-            rows.Add(new MessageRow($"Nothing matches “{query}”", hideInstalled ? "Hide installed is on, so mods you have aren't shown." : "Try part of the name, or a tag such as Crew or Graphics."));
+            rows.Add(new MessageRow($"Nothing matches “{query}”", hideInstalled || favouritesOnly ? "A filter is on, so some mods aren't shown." : "Try part of the name, or a tag such as Crew or Graphics."));
+        else if (tiles.Count == 0 && favouritesOnly)
+            rows.Add(new MessageRow("No favourites here yet", "Press the star on a mod to save it for later."));
         else if (tiles.Count == 0)
-            rows.Add(new MessageRow("You have every mod", "Turn off Hide installed to see them all again."));
+            rows.Add(new MessageRow(author != 0 ? $"You have every mod by {authorName}" : "You have every mod", "Turn off Hide installed to see them all again."));
 
         Rows.ItemsSource = rows;
     }

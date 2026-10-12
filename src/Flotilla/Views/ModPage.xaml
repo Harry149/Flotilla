@@ -60,6 +60,15 @@
                         <TextBlock Text="{Binding Title}" Margin="0,8,0,0" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold"
                                    FontSize="40" LineHeight="44" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap"/>
 
+                        <Button Style="{StaticResource Quiet}" Margin="0,6,0,0" HorizontalAlignment="Left" Click="OnAuthor"
+                                Visibility="{Binding HasAuthor, Converter={StaticResource Visible}}"
+                                ToolTip="See every mod by this author" AutomationProperties.Name="See every mod by this author">
+                            <TextBlock FontSize="14.5">
+                                <Run Text="by"/>
+                                <Run Text="{Binding Author, Mode=OneWay}" Foreground="{StaticResource AccentText}" FontWeight="SemiBold" TextDecorations="Underline"/>
+                            </TextBlock>
+                        </Button>
+
                         <WrapPanel Margin="0,12,0,0">
                             <Path Data="{StaticResource IconUsers}" Style="{StaticResource Icon}" Stroke="{StaticResource Muted}" Width="14" Height="14"/>
                             <TextBlock Text="{Binding SubscribersLong}" Margin="7,0,22,0" FontSize="13.5" Foreground="{StaticResource Soft}"/>
@@ -92,6 +101,7 @@
                                     <TextBlock Text="Open in Steam"/>
                                 </StackPanel>
                             </Button>
+                            <ToggleButton Style="{StaticResource StarToggle}" Width="40" Height="40" Margin="10,0,0,0" IsChecked="{Binding IsFavourite}"/>
                         </StackPanel>
 
                         <TextBlock Text="{Binding UpdateNote}" Margin="0,12,0,0" FontSize="13" TextWrapping="Wrap" Foreground="{StaticResource AccentText}">
@@ -135,7 +145,38 @@
                                      PreviewMouseWheel="OnDescriptionWheel"/>
                     </StackPanel>
 
-                    <Border Grid.Column="1" VerticalAlignment="Top" Padding="18,4" CornerRadius="6"
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                    <Border x:Name="Needs" Margin="0,0,0,16" Padding="18,14,18,8" CornerRadius="6" Visibility="Collapsed"
+                            Background="{StaticResource Card}" BorderBrush="{StaticResource AccentRing}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="Needs these mods" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15"/>
+                            <TextBlock Text="Its Workshop page lists these as required. Flotilla installs them with it." Margin="0,3,0,8" FontSize="12.5"
+                                       TextWrapping="Wrap" Foreground="{StaticResource Muted}"/>
+                            <ItemsControl x:Name="NeedsList" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource Quiet}" Padding="0,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                Click="OnNeed" ToolTip="Open this mod">
+                                            <DockPanel>
+                                                <Path x:Name="Mark" DockPanel.Dock="Left" Data="{StaticResource IconWarning}" Style="{StaticResource Icon}"
+                                                      Stroke="{StaticResource Warn}" Width="13" Height="13" Margin="0,0,10,0"/>
+                                                <TextBlock x:Name="State" DockPanel.Dock="Right" Text="{Binding State}" Margin="10,0,0,0" FontSize="12" Foreground="{StaticResource Warn}"/>
+                                                <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource Text}" TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
+                                        </Button>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Ready}" Value="True">
+                                                <Setter TargetName="Mark" Property="Data" Value="{StaticResource IconCheck}"/>
+                                                <Setter TargetName="Mark" Property="Stroke" Value="{StaticResource Accent}"/>
+                                                <Setter TargetName="State" Property="Foreground" Value="{StaticResource Muted}"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                    <Border VerticalAlignment="Top" Padding="18,4" CornerRadius="6"
                             Background="{StaticResource Card}" BorderBrush="{StaticResource CardLine}" BorderThickness="1">
                         <ItemsControl ItemsSource="{Binding Facts}" Focusable="False">
                             <ItemsControl.ItemTemplate>
@@ -155,6 +196,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </Border>
+                    </StackPanel>
                 </Grid>
             </Grid>
         </ScrollViewer>

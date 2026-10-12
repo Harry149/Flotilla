@@ -77,6 +77,14 @@
                                 <TextBlock Text="Installed" Margin="12,0,0,0" VerticalAlignment="Center"/>
                             </DockPanel>
                         </RadioButton>
+
+                        <RadioButton x:Name="SettingsTab" Style="{StaticResource Nav}" Checked="OnTabChanged" Click="OnTabClick" AutomationProperties.Name="Settings"
+                                     ToolTip="Cache, updates, warnings and folders (Ctrl+3)">
+                            <DockPanel>
+                                <Path Data="{StaticResource IconGear}" Style="{StaticResource Icon}"/>
+                                <TextBlock Text="Settings" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </RadioButton>
                     </StackPanel>
 
                     <Button DockPanel.Dock="Bottom" Style="{StaticResource Primary}" Height="44" Margin="14,0,14,16" Click="OnPlay" ToolTip="Starts UBOAT through Steam">
@@ -216,6 +224,7 @@
 
                 <views:WorkshopView x:Name="Browse" Grid.Row="1"/>
                 <views:InstalledView x:Name="InstalledPage" Grid.Row="1" Visibility="Collapsed"/>
+                <views:SettingsView x:Name="SettingsPage" Grid.Row="1" Visibility="Collapsed"/>
                 <views:ModPage x:Name="Details" Grid.RowSpan="2" Visibility="Collapsed"/>
 
                 <Grid Margin="28,0,12,0">
@@ -346,7 +355,7 @@
                         <TextBlock x:Name="DialogHint" Margin="0,8,0,0" FontSize="12.5" TextWrapping="Wrap" Foreground="{StaticResource Danger}"
                                    Visibility="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource VisibleWhenSet}}"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
-                            <Button Style="{StaticResource GhostButton}" Content="Cancel" Margin="0,0,10,0" Click="OnDialogCancel"/>
+                            <Button x:Name="DialogCancel" Style="{StaticResource GhostButton}" Content="Cancel" Margin="0,0,10,0" Click="OnDialogCancel"/>
                             <Button x:Name="DialogConfirm" Style="{StaticResource Primary}" MinWidth="100" Click="OnDialogConfirm"/>
                         </StackPanel>
                     </StackPanel>

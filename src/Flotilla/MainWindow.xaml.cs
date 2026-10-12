@@ -1,4 +1,7 @@
 using System.ComponentModel;
+using System.IO;
+using System.Net.Http;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -24,9 +27,9 @@ public partial class MainWindow : Window
         new("IconBrowse", "Find mods in Browse",
             "Browse shows every mod on the UBOAT Workshop. The banner at the top shows mods we recommend.",
             [
-                "Search by name or tag with Ctrl+F. Click a tag on a mod's page to see others like it.",
-                "Sort by popular, recently updated, newest or name. Hide installed shows only what you don't have yet.",
-                "Click a mod to read about it, then press Install. You don't need to sign in to Steam.",
+                "Search by name or tag with Ctrl+F. Click a tag or the author on a mod's page to see more like it.",
+                "Star mods to save them for later, then use the Favourites filter to find them again.",
+                "Click a mod to read about it, then press Install. Mods it needs are installed with it, and you don't need to sign in to Steam.",
             ]),
         new("IconInstalled", "Manage them in Installed",
             "Installed lists every mod on this PC, in the order UBOAT loads them.",
@@ -34,6 +37,7 @@ public partial class MainWindow : Window
                 "Flip the switch to turn a mod on or off. Mods you turn off stay installed.",
                 "Drag the dots on the left to change the load order. When two mods change the same thing, the lower one wins.",
                 "Double-click a mod to open its page. Right-click it to open its folder, see it on the Workshop, or uninstall it.",
+                "A yellow line under a mod means it needs another mod, was made for a different UBOAT version, or broke in your last game. Fix sorts out what it needs.",
             ], OnInstalled: true),
         new("IconLayers", "Save setups as profiles",
             "A profile remembers which mods are on and their order, so you can keep one setup for a full overhaul and another for a lighter game.",
@@ -52,13 +56,16 @@ public partial class MainWindow : Window
         new("IconPlay", "Ready to dive",
             "Press Play UBOAT in the sidebar to start the game through Steam with your mods.",
             [
+                "Play clears UBOAT's cache first, so leftovers from old mods can't cause trouble. You can change that, and more, in Settings.",
                 "A few mods need an account that owns UBOAT or a DLC, so they won't install anonymously. Use Open in Steam on their page and subscribe there, and Flotilla picks them up.",
                 "F5 refreshes the Workshop list. Ctrl+1 and Ctrl+2 switch between Browse and Installed.",
             ]),
     ];
 
     readonly Library library = new();
-    readonly Settings settings = Settings.Load();
+    Settings settings => library.Settings;
+    readonly Updater updater = new(Web.Client);
+    Update? update;
     ModTile? open;
     int tourStep = -1;
     bool clearingSearch;
@@ -77,13 +84,19 @@ public partial class MainWindow : Window
         Details.Closed += CloseMod;
         Details.InstallRequested += library.Install;
         Details.TagRequested += SearchTag;
+        Details.AuthorRequested += ShowAuthor;
+        Details.OpenRequested += Open;
         InstalledPage.BrowseRequested += () => BrowseTab.IsChecked = true;
         InstalledPage.OpenRequested += Open;
+        SettingsPage.TourRequested += () => ShowTour(0);
+        SettingsPage.UpdateCheckRequested += () => _ = CheckForUpdateAsync(manual: true);
+        SettingsPage.RestartRequested += OfferRestart;
         library.PropertyChanged += OnLibraryChanged;
 
         Loaded += async (_, _) =>
         {
             if (!settings.TutorialSeen) ShowTour(0);
+            _ = CheckForUpdateAsync();
             await library.StartAsync();
         };
         Activated += (_, _) => library.Rescan();
@@ -117,6 +130,10 @@ public partial class MainWindow : Window
                 InstalledTab.IsChecked = true;
                 CloseMod();
                 return true;
+            case Key.D3 or Key.NumPad3 when control:
+                SettingsTab.IsChecked = true;
+                CloseMod();
+                return true;
             case Key.F1:
                 ShowTour(0);
                 return true;
@@ -129,6 +146,9 @@ public partial class MainWindow : Window
                 return true;
             case Key.Escape when open is not null:
                 CloseMod();
+                return true;
+            case Key.Escape when Browse.IsVisible && Browse.ShowsAuthor:
+                Browse.ClearAuthor();
                 return true;
             default:
                 return false;
@@ -161,12 +181,31 @@ public partial class MainWindow : Window
         SearchBox.Text = tag;
     }
 
+    void ShowAuthor(ModTile tile)
+    {
+        BrowseTab.IsChecked = true;
+        CloseMod();
+        clearingSearch = true;
+        SearchBox.Clear();
+        clearingSearch = false;
+        Browse.Filter("");
+        Browse.ShowAuthor(tile.Item.Creator, tile.Author);
+    }
+
     void Open(ModTile tile)
     {
         open = tile;
         Details.DataContext = tile;
         Details.BackLabel = InstalledTab.IsChecked == true ? "Installed" : "Browse";
+        Details.ShowRequirements([]);
         ShowView();
+        _ = ShowRequirementsAsync(tile);
+    }
+
+    async Task ShowRequirementsAsync(ModTile tile)
+    {
+        var rows = await library.RequirementRowsAsync(tile.Id);
+        if (open == tile) Details.ShowRequirements(rows);
     }
 
     void CloseMod()
@@ -185,6 +224,7 @@ public partial class MainWindow : Window
         SearchBox.Clear();
         clearingSearch = false;
         Browse.Filter("");
+        Browse.ClearAuthor();
         InstalledPage.Filter("");
         UpdateSearchHint();
         ShowView();
@@ -195,9 +235,22 @@ public partial class MainWindow : Window
         if (InstalledPage is null) return;
 
         var installed = InstalledTab.IsChecked == true;
+        var settings = SettingsTab.IsChecked == true;
         Reveal(Details, open is not null);
         Reveal(InstalledPage, installed && open is null);
-        Reveal(Browse, !installed && open is null);
+        Reveal(SettingsPage, settings && open is null);
+        Reveal(Browse, !installed && !settings && open is null);
+        SearchBox.Visibility = settings && open is null ? Visibility.Hidden : Visibility.Visible;
+    }
+
+    async void OfferRestart()
+    {
+        var answer = await Ask("Restart Flotilla?", "Flotilla uses the new data folder after it restarts.", "Restart now", cancel: "Later");
+        if (answer is null || Environment.ProcessPath is not { } path) return;
+
+        SavePlacement();
+        Shell.Open(path);
+        Application.Current.Shutdown();
     }
 
     static void Reveal(UIElement view, bool visible)
@@ -240,6 +293,7 @@ public partial class MainWindow : Window
     {
         TutorialLayer.Visibility = Visibility.Collapsed;
         tourStep = -1;
+        Dispatcher.BeginInvoke(OfferUpdate);
         if (settings.TutorialSeen) return;
 
         settings.TutorialSeen = true;
@@ -268,7 +322,7 @@ public partial class MainWindow : Window
 
     void OnTutorialClose(object sender, RoutedEventArgs e) => CloseTour();
 
-    Task<string?> Ask(string title, string text, string confirm, string? input = null, bool danger = false, Func<string, string?>? check = null)
+    Task<string?> Ask(string title, string text, string confirm, string? input = null, bool danger = false, Func<string, string?>? check = null, string cancel = "Cancel")
     {
         dialog?.TrySetResult(null);
         dialog = new TaskCompletionSource<string?>();
@@ -278,6 +332,7 @@ public partial class MainWindow : Window
         DialogText.Text = text;
         DialogHint.Text = "";
         DialogConfirm.Content = confirm;
+        DialogCancel.Content = cancel;
         DialogConfirm.Style = (Style)FindResource(danger ? "DangerButton" : "Primary");
         DialogInput.Visibility = input is null ? Visibility.Collapsed : Visibility.Visible;
         DialogInput.Text = input ?? "";
@@ -302,6 +357,64 @@ public partial class MainWindow : Window
         var pending = dialog;
         dialog = null;
         pending?.TrySetResult(result);
+        Dispatcher.BeginInvoke(OfferUpdate);
+    }
+
+    async Task CheckForUpdateAsync(bool manual = false)
+    {
+        if (!manual)
+        {
+            Updater.CleanUp();
+            if (!library.Settings.CheckForUpdates) return;
+        }
+
+        try
+        {
+            update = await updater.CheckAsync();
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            if (manual) library.Status.Warn($"Couldn't check for updates: {e.Message}");
+            return;
+        }
+
+        if (manual && update is null) library.Status.Say($"You have the latest Flotilla, {Updater.Current}.");
+        OfferUpdate();
+    }
+
+    async void OfferUpdate()
+    {
+        if (update is not { } offer || TutorialLayer.IsVisible || DialogLayer.IsVisible) return;
+        update = null;
+
+        var notes = offer.Notes.Length > 420 ? offer.Notes[..420].TrimEnd() + "…" : offer.Notes;
+        var text = $"You have {Updater.Current}. {(Updater.CanReplaceItself ? "Flotilla downloads it, then restarts." : "This copy can't update itself, so the download page opens.")}";
+        if (notes.Length > 0) text += $"\n\nWhat's new:\n{notes}";
+
+        var answer = await Ask($"Flotilla {offer.Version} is out", text, "Update now", cancel: "Not now");
+        if (answer is null) return;
+
+        if (!Updater.CanReplaceItself)
+        {
+            Shell.Open(offer.Page);
+            return;
+        }
+
+        try
+        {
+            library.Status.Work("Updating Flotilla", $"Downloading {offer.Version}");
+            var downloaded = await updater.DownloadAsync(offer, new Progress<double>(p =>
+                library.Status.Work("Updating Flotilla", $"Downloading {offer.Version}, {p * 100:0}%", p)));
+            SavePlacement();
+            Updater.Install(downloaded);
+            Application.Current.Shutdown();
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            library.Status.Idle();
+            library.Status.Warn($"Couldn't update Flotilla: {e.Message} You can download it from the releases page instead.");
+            Shell.Open(offer.Page);
+        }
     }
 
     bool DialogKey(Key key)

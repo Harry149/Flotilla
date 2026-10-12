@@ -2,6 +2,8 @@ using Flotilla.Mods;
 
 namespace Flotilla.UI;
 
+public sealed record RequirementRow(string Name, string State, bool Ready, ModTile? Tile);
+
 public sealed class ProfileItem(Profile profile) : Observable
 {
     public Profile Profile

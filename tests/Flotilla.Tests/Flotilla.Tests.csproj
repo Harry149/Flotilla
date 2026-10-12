@@ -12,6 +12,7 @@
     <Compile Include="../../src/Flotilla/Json.cs" />
     <Compile Include="../../src/Flotilla/Web.cs" />
     <Compile Include="../../src/Flotilla/Featured.cs" />
+    <Compile Include="../../src/Flotilla/Updater.cs" />
     <Compile Include="../../src/Flotilla/Mods/*.cs" />
     <Compile Include="../../src/Flotilla/Steam/*.cs" />
     <Compile Include="../../src/Flotilla/Text/BBCode.cs" />
