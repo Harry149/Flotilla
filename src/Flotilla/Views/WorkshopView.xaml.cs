@@ -34,7 +34,7 @@ public sealed class HeroRow(IReadOnlyList<ModTile> tiles, bool featured) : Obser
     public void Show(int index) => Index = index;
 }
 
-public sealed record SectionRow(string Title, string Count, string Sort)
+public sealed record SectionRow(string Title, string Count, string Sort, bool HideInstalled)
 {
     public bool Popular => Sort == "popular";
     public bool Updated => Sort == "updated";
@@ -54,6 +54,7 @@ public partial class WorkshopView : UserControl
 
     string query = "";
     string sort = "popular";
+    bool hideInstalled;
     int columns = 4;
     HeroRow? hero;
     readonly DispatcherTimer rotate = new() { Interval = TimeSpan.FromSeconds(8) };
@@ -99,6 +100,12 @@ public partial class WorkshopView : UserControl
         if (next == sort) return;
 
         sort = next;
+        Refresh();
+    }
+
+    void OnHideInstalled(object sender, RoutedEventArgs e)
+    {
+        hideInstalled = !hideInstalled;
         Refresh();
     }
 
@@ -158,7 +165,7 @@ public partial class WorkshopView : UserControl
             return;
         }
 
-        var found = all.Where(t => t.Matches(query));
+        var found = all.Where(t => t.Matches(query) && !(hideInstalled && t.State is TileState.Installed or TileState.Outdated or TileState.Subscribed));
         var tiles = (sort switch
         {
             "updated" => found.OrderByDescending(t => t.Item.Updated),
@@ -171,15 +178,18 @@ public partial class WorkshopView : UserControl
         if (query.Length == 0)
         {
             rows.Add(Hero(library));
-            rows.Add(new SectionRow("All mods", $"{tiles.Count:N0} mods", sort));
+            rows.Add(new SectionRow("All mods", $"{tiles.Count:N0} mods", sort, hideInstalled));
         }
         else
         {
-            rows.Add(new SectionRow("Results", $"{tiles.Count:N0} of {all.Count:N0}", sort));
+            rows.Add(new SectionRow("Results", $"{tiles.Count:N0} of {all.Count:N0}", sort, hideInstalled));
         }
 
         rows.AddRange(tiles.Chunk(columns).Select(chunk => new TileRow(chunk, columns)));
-        if (tiles.Count == 0) rows.Add(new MessageRow($"Nothing matches “{query}”", "Try part of the name, or a tag such as Crew or Graphics."));
+        if (tiles.Count == 0 && query.Length > 0)
+            rows.Add(new MessageRow($"Nothing matches “{query}”", hideInstalled ? "Hide installed is on, so mods you have aren't shown." : "Try part of the name, or a tag such as Crew or Graphics."));
+        else if (tiles.Count == 0)
+            rows.Add(new MessageRow("You have every mod", "Turn off Hide installed to see them all again."));
 
         Rows.ItemsSource = rows;
     }

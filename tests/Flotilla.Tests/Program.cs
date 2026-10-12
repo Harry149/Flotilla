@@ -55,6 +55,25 @@ new ModList(Path.Combine(temp, "launched", "modlist.txt"), Path.Combine(temp, "l
 var launcherText = File.ReadAllText(launcher);
 Check(launcherText.IndexOf("\"B\"") < launcherText.IndexOf("\"a\"") && launcherText.IndexOf("\"a\"") < launcherText.IndexOf("\"other\"") && launcherText.Contains("lastVersion") && launcherText.Contains("muted"), "the launcher's own list is put in the same order, keeping its other data");
 
+Console.WriteLine("Profiles");
+var (profileOn, profileMissing) = ProfileStore.Resolve(["steam:1", "2", "Local Mod"], ["2", "local mod", "3", "steam:1"]);
+Check(profileOn.SequenceEqual(["2", "Local Mod", "steam:1"]) && profileMissing.SequenceEqual(["3"]), "a profile's mods are found in its order, and missing ones are listed");
+Check(ProfileStore.Resolve(["steam:7"], ["7"]).On.SequenceEqual(["steam:7"]), "a mod installed by Flotilla matches the same mod subscribed in Steam");
+Check(ProfileStore.Resolve(["7"], ["steam:7"]).On.SequenceEqual(["7"]), "a mod subscribed in Steam matches the same mod installed by Flotilla");
+Check(ProfileStore.Resolve(["7", "steam:7"], ["7", "steam:7"]).On.SequenceEqual(["7", "steam:7"]), "both copies of a mod can be in a profile");
+var profile = new Profile("Overhaul", ["a", "b"]);
+Check(ProfileStore.IsActive(profile, ["a", "b", "c"], ["a", "b"]), "a profile is active when exactly its mods are on, in its order");
+Check(!ProfileStore.IsActive(profile, ["a", "b", "c"], ["b", "a"]), "a different order isn't the profile");
+Check(!ProfileStore.IsActive(profile, ["a", "b", "c"], ["a", "b", "c"]), "an extra mod switched on isn't the profile");
+Check(!ProfileStore.IsActive(profile, ["a"], ["a"]), "a profile with a missing mod isn't active");
+var profilesFile = Path.Combine(temp, "profiles.json");
+ProfileStore.Save(profilesFile, [profile, new Profile("Vanilla", [])]);
+var savedProfiles = ProfileStore.Load(profilesFile);
+Check(savedProfiles.Count == 2 && savedProfiles[0].Name == "Overhaul" && savedProfiles[0].Mods.SequenceEqual(["a", "b"]) && savedProfiles[1].Mods.Count == 0, "profiles are saved and read back");
+File.WriteAllText(profilesFile, "not json");
+Check(ProfileStore.Load(profilesFile).Count == 0, "a broken profiles file means no profiles, not a crash");
+Check(ProfileStore.Load(Path.Combine(temp, "none.json")).Count == 0, "no profiles file means no profiles");
+
 Console.WriteLine("Featured");
 Check(Flotilla.Featured.Parse("# notes\r\n3814892328\n  3744719470  # Living Depths\n\nnot an id\n3814892328\n").SequenceEqual([3814892328UL, 3744719470UL]), "reads IDs in order, skipping notes, blanks, junk and repeats");
 Check(Flotilla.Featured.Parse("").Count == 0, "an empty file features nothing");

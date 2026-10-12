@@ -18,6 +18,29 @@
                 <TextBlock Text="Installed" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="32"/>
                 <TextBlock Text="{Binding InstalledSummary}" Margin="0,6,0,0" MaxWidth="620" HorizontalAlignment="Left"
                            TextWrapping="Wrap" LineHeight="22" Foreground="{StaticResource Muted}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Installed.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <Button Style="{StaticResource Quiet}" Click="OnAllOn" ToolTip="Switch on every installed mod">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPower}" Style="{StaticResource Icon}" Width="13" Height="13" Margin="0,0,7,0"/>
+                            <TextBlock Text="Turn all on"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource Quiet}" Margin="20,0,0,0" Click="OnAllOff" ToolTip="Switch off every mod. They stay installed.">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPower}" Style="{StaticResource Icon}" Width="13" Height="13" Margin="0,0,7,0" Opacity="0.6"/>
+                            <TextBlock Text="Turn all off"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="24,0,0,0">
@@ -60,14 +83,23 @@
                  ItemContainerStyle="{StaticResource Row}"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  ScrollViewer.CanContentScroll="False"
-                 PreviewKeyDown="OnListKey">
+                 PreviewKeyDown="OnListKey" MouseDoubleClick="OnRowDoubleClick">
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <Grid Height="72" Background="Transparent">
                         <Grid.ContextMenu>
                             <ContextMenu>
+                                <MenuItem Header="Open mod page" Click="OnOpenPage"
+                                          Visibility="{Binding Tile, Converter={StaticResource VisibleWhenSet}}"/>
+                                <MenuItem Header="Open its folder" Click="OnOpenModFolder"
+                                          Visibility="{Binding Folder.Path, Converter={StaticResource VisibleWhenSet}}"/>
+                                <MenuItem Header="View on the Workshop" Click="OnOpenWorkshop"
+                                          Visibility="{Binding WorkshopId, Converter={StaticResource VisibleWhenSet}}"/>
+                                <Separator/>
                                 <MenuItem Header="Move to top" Click="OnMoveTop"/>
                                 <MenuItem Header="Move to bottom" Click="OnMoveBottom"/>
+                                <Separator/>
+                                <MenuItem Header="{Binding RemoveTip}" Click="OnRemoveNow"/>
                             </ContextMenu>
                         </Grid.ContextMenu>
                         <Grid.ColumnDefinitions>
@@ -114,10 +146,28 @@
                             <TextBlock Text="{Binding Details}" Margin="0,3,0,0" FontSize="12.5" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}"/>
                         </StackPanel>
 
-                        <Button Grid.Column="4" Style="{StaticResource Primary}" Height="30" Padding="14,0" FontSize="13" Margin="0,0,14,0"
+                        <Button Grid.Column="4" Height="30" Padding="14,0" FontSize="13" Margin="0,0,14,0"
                                 Content="{Binding Tile.Action}" IsEnabled="{Binding Tile.CanInstall}" Tag="{Binding Tile.Progress}"
-                                Visibility="{Binding Tile.ShowsUpdate, Converter={StaticResource Visible}, FallbackValue=Collapsed}"
-                                ToolTip="{Binding Tile.UpdateNote}" Click="OnUpdate"/>
+                                ToolTip="{Binding Tile.UpdateNote}" Click="OnUpdate">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource Primary}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Tile.ShowsUpdate}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding Source}" Value="Missing"/>
+                                                <Condition Binding="{Binding Tile.CanInstall}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Setter Property="ToolTip" Value="Download it again from the Workshop"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
 
                         <Border x:Name="Source" Grid.Column="5" VerticalAlignment="Center" Padding="9,2,9,3" CornerRadius="10"
                                 Background="{StaticResource Chip}" ToolTip="{Binding SourceTip}">
@@ -178,6 +228,12 @@
             <TextBlock Text="Mods you install from Browse show up here, ready to switch on or off." Margin="0,8,0,0"
                        HorizontalAlignment="Center" Foreground="{StaticResource Muted}"/>
             <Button Style="{StaticResource Primary}" Content="Browse mods" Margin="0,20,0,0" HorizontalAlignment="Center" Click="OnBrowse"/>
+        </StackPanel>
+
+        <StackPanel x:Name="NoMatch" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,60,0,0" Visibility="Collapsed">
+            <TextBlock x:Name="NoMatchTitle" HorizontalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed"
+                       FontWeight="SemiBold" FontSize="22"/>
+            <TextBlock Text="Try part of the name, or clear the search with Esc." Margin="0,8,0,0" HorizontalAlignment="Center" Foreground="{StaticResource Muted}"/>
         </StackPanel>
     </Grid>
 </UserControl>

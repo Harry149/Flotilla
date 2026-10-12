@@ -14,18 +14,24 @@ public sealed class Library : Observable
     readonly Workshop workshop = new(Web.Client);
     readonly ModList modList = new(Paths.ModList, Path.Combine(Paths.AppData, "order.txt"));
     readonly string catalogue = Path.Combine(Paths.AppData, "workshop.json");
+    readonly string profilesFile = Path.Combine(Paths.AppData, "profiles.json");
     readonly SteamCmd steam = new(Path.Combine(Paths.AppData, "steamcmd"));
     readonly Installer installer;
     Dictionary<ulong, ModTile> tiles = [];
+    Profile? installingFor;
+    bool refreshing;
 
     public Library()
     {
         installer = new Installer(steam, Paths.Mods, Status);
         installer.Installed += OnInstalled;
+        installer.Finished += () => installingFor = null;
+        foreach (var profile in ProfileStore.Load(profilesFile)) Profiles.Add(new ProfileItem(profile));
     }
 
     public StatusLine Status { get; } = new();
     public ObservableCollection<InstalledMod> Installed { get; } = [];
+    public ObservableCollection<ProfileItem> Profiles { get; } = [];
     public IReadOnlyList<ModTile> Tiles { get; private set => Set(ref field, value); } = [];
     public IReadOnlyList<ulong> FeaturedIds { get; private set => Set(ref field, value); } = [];
     public string? WorkshopError { get; private set => Set(ref field, value); }
@@ -54,6 +60,9 @@ public sealed class Library : Observable
 
     public async Task RefreshWorkshopAsync()
     {
+        if (refreshing) return;
+
+        refreshing = true;
         WorkshopError = null;
         try
         {
@@ -65,6 +74,10 @@ public sealed class Library : Observable
         {
             WorkshopError = e.Message;
             Status.Warn($"Couldn't read the Steam Workshop: {e.Message}");
+        }
+        finally
+        {
+            refreshing = false;
         }
     }
 
@@ -284,6 +297,22 @@ public sealed class Library : Observable
         }
 
         Reload();
+        var count = Arrange(keys);
+        if (!Save()) return;
+        SyncTiles();
+
+        var notes = new List<string> { count == 1 ? "Imported 1 mod and switched it on." : $"Imported {count} mods and switched them on in the list's order." };
+        if (newer.Count > 0) notes.Add($"Steam no longer has the exported version of {Names(newer)}, so {(newer.Count == 1 ? "it got" : "they got")} the latest.");
+        if (steamVersion.Count > 0) notes.Add($"{Names(steamVersion)} {(steamVersion.Count == 1 ? "is a Steam subscription, so it stays" : "are Steam subscriptions, so they stay")} at Steam's version.");
+        if (problems.Count > 0) notes.Add($"Couldn't add {string.Join("; ", problems)}.");
+
+        var message = string.Join(" ", notes);
+        if (problems.Count > 0 || newer.Count > 0 || steamVersion.Count > 0) Status.Warn(message);
+        else Status.Say(message);
+    }
+
+    int Arrange(IEnumerable<string> keys)
+    {
         var order = keys.Select(k => Installed.FirstOrDefault(m => m.Key.Equals(k, StringComparison.OrdinalIgnoreCase))).OfType<InstalledMod>().Distinct().ToList();
         var rest = Installed.Except(order).ToList();
         Installed.Clear();
@@ -292,17 +321,125 @@ public sealed class Library : Observable
             mod.Enabled = order.Contains(mod);
             Installed.Add(mod);
         }
+        return order.Count;
+    }
+
+    public void SetAll(bool enabled)
+    {
+        var changed = Installed.Where(m => m.Enabled != enabled && (m.Source != ModSource.Missing || !enabled)).ToList();
+        if (changed.Count == 0) return;
+
+        foreach (var mod in changed) mod.Enabled = enabled;
+        if (Save()) Status.Say(enabled ? "Switched every mod on." : "Switched every mod off.");
+    }
+
+    IEnumerable<string> Available => Installed.Where(m => m.Source != ModSource.Missing).Select(m => m.Key);
+
+    IEnumerable<string> EnabledKeys => Installed.Where(m => m.Enabled && m.Source != ModSource.Missing).Select(m => m.Key);
+
+    public ProfileItem? FindProfile(string name) =>
+        Profiles.FirstOrDefault(p => p.Name.Equals(name.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+    public void SaveProfile(string name)
+    {
+        name = name.Trim();
+        if (name.Length == 0) return;
+
+        var profile = new Profile(name, [.. EnabledKeys]);
+        if (FindProfile(name) is { } existing) existing.Profile = profile;
+        else Profiles.Add(new ProfileItem(profile));
+
+        if (!StoreProfiles()) return;
+        Status.Say(profile.Mods.Count == 1 ? $"Saved {name} with 1 mod." : $"Saved {name} with {profile.Mods.Count} mods.");
+    }
+
+    public void UpdateProfile(ProfileItem item)
+    {
+        item.Profile = item.Profile with { Mods = [.. EnabledKeys] };
+        if (StoreProfiles()) Status.Say($"{item.Name} now has the {item.Profile.Mods.Count} mods that are switched on.");
+    }
+
+    public void RenameProfile(ProfileItem item, string name)
+    {
+        name = name.Trim();
+        if (name.Length == 0 || name == item.Name) return;
+
+        item.Profile = item.Profile with { Name = name };
+        StoreProfiles();
+    }
+
+    public void DeleteProfile(ProfileItem item)
+    {
+        Profiles.Remove(item);
+        if (StoreProfiles()) Status.Say($"Deleted the {item.Name} profile. Your mods are unchanged.");
+    }
+
+    public void MoveProfile(ProfileItem item, int index)
+    {
+        var from = Profiles.IndexOf(item);
+        index = Math.Clamp(index, 0, Profiles.Count - 1);
+        if (from < 0 || from == index) return;
+
+        Profiles.Move(from, index);
+        StoreProfiles();
+    }
+
+    public void ApplyProfile(ProfileItem item)
+    {
+        if (GameIsRunning())
+        {
+            Status.Warn("Close UBOAT first. Profiles can't be switched while the game or its launcher is open.");
+            return;
+        }
+
+        var (on, missing) = ProfileStore.Resolve(Available, item.Profile.Mods);
+        Arrange(on);
         if (!Save()) return;
         SyncTiles();
 
-        var notes = new List<string> { order.Count == 1 ? "Imported 1 mod and switched it on." : $"Imported {order.Count} mods and switched them on in the list's order." };
-        if (newer.Count > 0) notes.Add($"Steam no longer has the exported version of {Names(newer)}, so {(newer.Count == 1 ? "it got" : "they got")} the latest.");
-        if (steamVersion.Count > 0) notes.Add($"{Names(steamVersion)} {(steamVersion.Count == 1 ? "is a Steam subscription, so it stays" : "are Steam subscriptions, so they stay")} at Steam's version.");
-        if (problems.Count > 0) notes.Add($"Couldn't add {string.Join("; ", problems)}.");
+        var installing = new List<string>();
+        var unknown = new List<string>();
+        foreach (var key in missing)
+        {
+            var id = ModFolder.Missing(key).WorkshopId;
+            if (Find(id) is { CanInstall: true } tile)
+            {
+                installing.Add(tile.Title);
+                installer.Add(tile);
+            }
+            else unknown.Add(Find(id)?.Title ?? key);
+        }
+        if (installing.Count > 0) installingFor = item.Profile;
+        CountUpdates();
 
-        var message = string.Join(" ", notes);
-        if (problems.Count > 0 || newer.Count > 0 || steamVersion.Count > 0) Status.Warn(message);
-        else Status.Say(message);
+        var notes = new List<string> { $"Switched to {item.Name}." };
+        if (installing.Count > 0) notes.Add($"Installing {Names(installing)}, then {(installing.Count == 1 ? "it switches" : "they switch")} on in the profile's order.");
+        if (unknown.Count > 0) notes.Add($"Couldn't find {Names(unknown)} on this PC or the Workshop.");
+
+        if (unknown.Count > 0) Status.Warn(string.Join(" ", notes));
+        else Status.Say(string.Join(" ", notes));
+    }
+
+    bool StoreProfiles()
+    {
+        try
+        {
+            ProfileStore.Save(profilesFile, Profiles.Select(p => p.Profile));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Status.Warn($"Couldn't save your profiles: {e.Message}");
+            return false;
+        }
+        MarkProfiles();
+        return true;
+    }
+
+    void MarkProfiles()
+    {
+        var available = Available.ToList();
+        var enabled = EnabledKeys.ToList();
+        foreach (var item in Profiles) item.IsActive = ProfileStore.IsActive(item.Profile, available, enabled);
     }
 
     Task<string?> DownloadAsync(WorkshopItem item, ulong manifest, int index, int count)
@@ -338,10 +475,15 @@ public sealed class Library : Observable
     void OnInstalled(ModTile tile)
     {
         var key = tile.Id.ToString();
-        var isNew = Installed.All(m => m.Key != key);
+        var isNew = Installed.All(m => m.Key != key || m.Source == ModSource.Missing);
         Reload();
 
-        if (isNew && Installed.FirstOrDefault(m => m.Key == key) is { } mod)
+        if (installingFor is { } profile && ProfileStore.Resolve([key], profile.Mods).On.Count > 0)
+        {
+            Arrange(ProfileStore.Resolve(Available, profile.Mods).On);
+            if (!Save()) return;
+        }
+        else if (isNew && Installed.FirstOrDefault(m => m.Key == key) is { } mod)
         {
             mod.Enabled = true;
             if (!Save()) return;
@@ -408,6 +550,7 @@ public sealed class Library : Observable
             1 => on == 1 ? "1 mod, switched on." : "1 mod, switched off.",
             _ => $"{Installed.Count} mods, {(on == Installed.Count ? "all" : on == 0 ? "none" : on.ToString())} switched on. UBOAT loads them from the top down, so the lower one wins when two change the same thing.",
         };
+        MarkProfiles();
     }
 
     void SyncTiles()

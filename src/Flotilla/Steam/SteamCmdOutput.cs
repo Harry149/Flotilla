@@ -14,7 +14,7 @@ public static class SteamCmdOutput
     static readonly Regex TimedOut = new(@"ERROR! Timeout downloading item (\d+)", RegexOptions.Compiled);
     static readonly Regex DepotFailed = new(@"Depot download failed : (?:.*\(([^)]*)\)|(.*))", RegexOptions.Compiled);
 
-    public const string AnonymousRefused = "Steam wouldn't allow an anonymous download, so this mod may need an account that owns UBOAT";
+    public const string AnonymousRefused = "Steam wouldn't allow an anonymous download. It may need an account that owns UBOAT or a DLC, so use Open in Steam and subscribe there instead";
     public const string VersionGone = "Steam no longer has that version";
 
     public static SteamCmdEvent? ReadDepot(string line)

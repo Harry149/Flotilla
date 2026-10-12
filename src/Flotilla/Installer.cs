@@ -12,6 +12,7 @@ public sealed class Installer(SteamCmd steam, string mods, StatusLine status)
     bool running;
 
     public event Action<ModTile>? Installed;
+    public event Action? Finished;
 
     public void Add(ModTile tile)
     {
@@ -45,6 +46,7 @@ public sealed class Installer(SteamCmd steam, string mods, StatusLine status)
         {
             running = false;
             status.Idle();
+            Finished?.Invoke();
         }
     }
 

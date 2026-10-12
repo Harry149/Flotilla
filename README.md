@@ -39,13 +39,18 @@ Flotilla rewrites that file whenever you change something, keeping its line endi
 
 **Export and Import** share a setup. Export saves a text file listing every mod that's switched on, in load order, one per line: the Workshop ID, the exact version (the Steam manifest ID, or `latest` when Flotilla doesn't know it), and the name. Import reads that file and installs each mod at that version with SteamCMD's `download_depot`. If Steam no longer has that version, Import installs the latest one and says so. It then switches on exactly the mods in the file, in its order. Mods that aren't in the file stay installed, switched off. A mod you subscribe to in Steam is used as it is, because Steam decides its version. A local mod is only switched on if a folder with that name is already in the Mods folder. Flotilla records the versions it installed this way in `steamcmd\versions.txt`, so the Update button still knows when the Workshop has something newer.
 
+**Profiles** save which mods are switched on and their load order, under a name, in `%LOCALAPPDATA%\Flotilla\profiles.json`. Press + next to Profiles in the sidebar to save the current setup, and click a profile to switch to it: its mods are switched on in its order and everything else is switched off. A Workshop mod in the profile that isn't installed is installed first and slotted into place. A mod saved from Flotilla matches the same mod subscribed in Steam, and the other way round. Right-click a profile to update it with the mods that are on now, rename, reorder or delete it.
+
+**Help** is the ? button at the top right or How Flotilla works at the bottom of the sidebar (or F1). It opens a short tour, which also shows the first time Flotilla starts. Other shortcuts: Ctrl+F searches (Browse, or the Installed list when that's open), Ctrl+1 and Ctrl+2 switch tabs, F5 refreshes the Workshop list, and Alt with the arrow keys moves a mod in the load order.
+
 **Uninstalling** deletes the mod's folder for anything in the Mods folder. A Steam subscription can only be removed by Steam, so for those the button opens the mod in Steam, where you unsubscribe.
 
 Changes are refused while `Flotilla.exe` is running, because the game reads and rewrites `modlist.txt` itself. Play UBOAT in the sidebar starts the game through Steam.
 
 ## Limits
 
-- Mods that need the Type IX DLC, or that Steam won't hand out anonymously, fail with a message saying so. Subscribe to those in Steam instead.
+- Mods that need the Type IX DLC, or that Steam won't hand out anonymously, fail with a message saying so. Subscribe to those in Steam instead (Open in Steam on the mod's page), and Flotilla picks them up. SteamCMD can't borrow the Steam app's sign-in, so Flotilla never asks for Steam credentials.
+- `Flotilla.exe` isn't code-signed, so Windows SmartScreen warns the first time it runs, and PCs with Smart App Control switched on block it.
 - Dependencies listed on a Workshop page aren't installed automatically.
 - Updates are checked against the Workshop list Flotilla last read, which refreshes every time it starts. A mod Flotilla installed before this version, or one SteamCMD has no record of, won't show an Update button until you reinstall it once.
 - Load order controls data sheets, textures and sounds. Each code mod sets its own Harmony patch order.

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -32,10 +33,53 @@ public partial class InstalledView : UserControl
     }
 
     public event Action? BrowseRequested;
+    public event Action<ModTile>? OpenRequested;
 
     Library Library => (Library)DataContext;
 
+    bool Filtering => Order.Items.Filter is not null;
+
+    public void Filter(string text)
+    {
+        text = text.Trim();
+        Order.Items.Filter = text.Length == 0 ? null
+            : item => item is InstalledMod mod && (mod.Name.Contains(text, StringComparison.CurrentCultureIgnoreCase) || mod.Key.Contains(text, StringComparison.OrdinalIgnoreCase));
+
+        var none = text.Length > 0 && Order.Items.Count == 0;
+        NoMatchTitle.Text = $"No installed mod matches “{text}”";
+        NoMatch.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     void OnToggle(object sender, RoutedEventArgs e) => Library.Save();
+
+    void OnAllOn(object sender, RoutedEventArgs e) => Library.SetAll(true);
+
+    void OnAllOff(object sender, RoutedEventArgs e) => Library.SetAll(false);
+
+    static InstalledMod? ModOf(object sender) => ((FrameworkElement)sender).DataContext as InstalledMod;
+
+    void OnRowDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject source || Visuals.Ancestor<ButtonBase>(source) is not null) return;
+        if (Visuals.Ancestor<ListBoxItem>(source)?.DataContext is InstalledMod { Tile: { } tile }) OpenRequested?.Invoke(tile);
+    }
+
+    void OnOpenPage(object sender, RoutedEventArgs e)
+    {
+        if (ModOf(sender) is { Tile: { } tile }) OpenRequested?.Invoke(tile);
+    }
+
+    void OnOpenModFolder(object sender, RoutedEventArgs e)
+    {
+        if (ModOf(sender) is { Folder.Path: { } path }) Shell.Open(path);
+    }
+
+    void OnOpenWorkshop(object sender, RoutedEventArgs e)
+    {
+        if (ModOf(sender) is { WorkshopId: { } id }) Shell.OpenInSteam(id);
+    }
+
+    void OnRemoveNow(object sender, RoutedEventArgs e) => OnRemove(sender, e);
 
     void OnBrowse(object sender, RoutedEventArgs e) => BrowseRequested?.Invoke();
 
@@ -89,7 +133,7 @@ public partial class InstalledView : UserControl
 
     void OnListKey(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.System || Order.SelectedItem is not InstalledMod mod) return;
+        if (e.Key != Key.System || Filtering || Order.SelectedItem is not InstalledMod mod) return;
 
         var index = Library.Installed.IndexOf(mod);
         var target = e.SystemKey switch
@@ -122,6 +166,12 @@ public partial class InstalledView : UserControl
     void OnGripDown(object sender, MouseButtonEventArgs e)
     {
         if (drag is not null) return;
+        if (Filtering)
+        {
+            Library.Status.Say("Clear the search to change the load order.");
+            e.Handled = true;
+            return;
+        }
 
         var grip = (FrameworkElement)sender;
         pressed = grip.DataContext as InstalledMod;

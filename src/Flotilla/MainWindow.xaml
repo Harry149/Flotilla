@@ -15,6 +15,19 @@
         <WindowChrome CaptionHeight="64" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
 
+    <Window.Resources>
+        <ContextMenu x:Key="ProfileMenu" x:Shared="False">
+            <MenuItem Header="Switch to this profile" Click="OnProfileApply"/>
+            <MenuItem Header="Save the mods that are on into it" Click="OnProfileUpdate"/>
+            <Separator/>
+            <MenuItem Header="Rename" Click="OnProfileRename"/>
+            <MenuItem Header="Move up" Click="OnProfileUp"/>
+            <MenuItem Header="Move down" Click="OnProfileDown"/>
+            <Separator/>
+            <MenuItem Header="Delete" Click="OnProfileDelete"/>
+        </ContextMenu>
+    </Window.Resources>
+
     <Border x:Name="Root">
         <Grid>
             <Grid.ColumnDefinitions>
@@ -23,7 +36,7 @@
             </Grid.ColumnDefinitions>
 
             <Border Background="{StaticResource Side}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
-                <DockPanel LastChildFill="False">
+                <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Height="64" Margin="22,0,0,0">
                         <Border Width="28" Height="28" CornerRadius="7" Background="{StaticResource Mark}" BorderBrush="{StaticResource AccentRing}" BorderThickness="1">
                             <Path Data="{StaticResource IconSonar}" Style="{StaticResource Icon}" Stroke="{StaticResource Accent}" Width="18" Height="18" StrokeThickness="1.6"/>
@@ -32,7 +45,8 @@
                     </StackPanel>
 
                     <StackPanel DockPanel.Dock="Top" Margin="14,6,14,0">
-                        <RadioButton x:Name="BrowseTab" Style="{StaticResource Nav}" IsChecked="True" Checked="OnTabChanged" AutomationProperties.Name="Browse">
+                        <RadioButton x:Name="BrowseTab" Style="{StaticResource Nav}" IsChecked="True" Checked="OnTabChanged" Click="OnTabClick" AutomationProperties.Name="Browse"
+                                     ToolTip="Find mods on the Steam Workshop (Ctrl+1)">
                             <DockPanel>
                                 <Path Data="{StaticResource IconBrowse}" Style="{StaticResource Icon}"/>
                                 <Border DockPanel.Dock="Right" Background="{StaticResource Chip}" CornerRadius="9" Padding="8,1,8,2" VerticalAlignment="Center">
@@ -42,7 +56,8 @@
                             </DockPanel>
                         </RadioButton>
 
-                        <RadioButton x:Name="InstalledTab" Style="{StaticResource Nav}" Checked="OnTabChanged" AutomationProperties.Name="Installed">
+                        <RadioButton x:Name="InstalledTab" Style="{StaticResource Nav}" Checked="OnTabChanged" Click="OnTabClick" AutomationProperties.Name="Installed"
+                                     ToolTip="Switch mods on and off and set their load order (Ctrl+2)">
                             <DockPanel>
                                 <Path Data="{StaticResource IconInstalled}" Style="{StaticResource Icon}"/>
                                 <Border DockPanel.Dock="Right" Background="{StaticResource Chip}" CornerRadius="9" Padding="8,1,8,2" VerticalAlignment="Center">
@@ -69,6 +84,14 @@
                             <Path Data="{StaticResource IconPlay}" Style="{StaticResource Icon}" Stroke="{StaticResource OnAccent}" Fill="{StaticResource OnAccent}"
                                   Width="10" Height="11" StrokeThickness="1.4" Margin="0,0,10,0"/>
                             <TextBlock Text="Play UBOAT"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button DockPanel.Dock="Bottom" Style="{StaticResource Quiet}" Margin="24,0,14,10" HorizontalAlignment="Left" Click="OnHelp"
+                            ToolTip="A quick tour of Flotilla (F1)" AutomationProperties.Name="Help">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconHelp}" Style="{StaticResource Icon}" Width="15" Height="15" Margin="0,0,10,0"/>
+                            <TextBlock Text="How Flotilla works"/>
                         </StackPanel>
                     </Button>
 
@@ -112,6 +135,76 @@
                         </Grid>
                     </Border>
 
+                    <Grid DockPanel.Dock="Top" Margin="26,22,18,6">
+                        <TextBlock Text="PROFILES" VerticalAlignment="Center" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource Faint}"/>
+                        <Button Style="{StaticResource IconButton}" MinWidth="26" Height="26" HorizontalAlignment="Right" Click="OnNewProfile"
+                                ToolTip="Save the mods that are switched on as a new profile" AutomationProperties.Name="New profile">
+                            <Path Data="{StaticResource IconPlus}" Style="{StaticResource Icon}" Width="12" Height="12" StrokeThickness="1.8"/>
+                        </Button>
+                    </Grid>
+
+                    <Grid Margin="14,0,14,12">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                            <ItemsControl ItemsSource="{Binding Profiles}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button x:Name="Item" Style="{StaticResource ProfileButton}" Click="OnProfileApply" ContextMenu="{StaticResource ProfileMenu}"
+                                                ToolTip="Switch to this profile. Right-click for more." AutomationProperties.Name="{Binding Name}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Path x:Name="Mark" Data="{StaticResource IconLayers}" Style="{StaticResource Icon}" Stroke="{StaticResource Faint}" Width="14" Height="14"/>
+                                                <TextBlock x:Name="Label" Grid.Column="1" Text="{Binding Name}" Margin="10,0,8,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Count}" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource Faint}"
+                                                           ToolTip="Mods in this profile"/>
+                                                <Button x:Name="More" Grid.Column="3" Style="{StaticResource IconButton}" MinWidth="24" Height="24" Margin="4,0,0,0"
+                                                        Click="OnProfileMore" Opacity="0" ContextMenu="{StaticResource ProfileMenu}" AutomationProperties.Name="Profile options">
+                                                    <Path Data="{StaticResource IconMore}" Style="{StaticResource Icon}" Width="14" Height="4" StrokeThickness="2.6"/>
+                                                </Button>
+                                            </Grid>
+                                        </Button>
+                                        <DataTemplate.Triggers>
+                                            <Trigger SourceName="Item" Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="More" Property="Opacity" Value="1"/>
+                                            </Trigger>
+                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                <Setter TargetName="Mark" Property="Data" Value="{StaticResource IconCheck}"/>
+                                                <Setter TargetName="Mark" Property="Stroke" Value="{StaticResource Accent}"/>
+                                                <Setter TargetName="Label" Property="Foreground" Value="{StaticResource Text}"/>
+                                                <Setter TargetName="Label" Property="FontWeight" Value="SemiBold"/>
+                                                <Setter TargetName="Item" Property="ToolTip" Value="This profile is on. Right-click for more."/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <StackPanel Margin="12,2,4,0" VerticalAlignment="Top">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Profiles.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="Save the mods you have switched on as a profile, then swap between setups in one click."
+                                       FontSize="12.5" LineHeight="19" TextWrapping="Wrap" Foreground="{StaticResource Faint}"/>
+                            <Button Style="{StaticResource Quiet}" Margin="0,8,0,0" HorizontalAlignment="Left" Click="OnNewProfile">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconPlus}" Style="{StaticResource Icon}" Width="11" Height="11" StrokeThickness="1.8" Margin="0,0,8,0"/>
+                                    <TextBlock Text="New profile"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
                 </DockPanel>
             </Border>
 
@@ -122,8 +215,8 @@
                 </Grid.RowDefinitions>
 
                 <views:WorkshopView x:Name="Browse" Grid.Row="1"/>
-                <views:ModPage x:Name="Details" Grid.RowSpan="2" Visibility="Collapsed"/>
                 <views:InstalledView x:Name="InstalledPage" Grid.Row="1" Visibility="Collapsed"/>
+                <views:ModPage x:Name="Details" Grid.RowSpan="2" Visibility="Collapsed"/>
 
                 <Grid Margin="28,0,12,0">
                     <Grid.ColumnDefinitions>
@@ -136,6 +229,10 @@
                              WindowChrome.IsHitTestVisibleInChrome="True" TextChanged="OnSearch" AutomationProperties.Name="Search mods"/>
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource Caption}" Margin="2,0,10,0" Click="OnHelp" ToolTip="How Flotilla works (F1)" AutomationProperties.Name="Help">
+                            <Path Data="{StaticResource IconHelp}" Style="{StaticResource Icon}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  Width="16" Height="16" StrokeThickness="1.5"/>
+                        </Button>
                         <Button Style="{StaticResource Caption}" Click="OnMinimize" AutomationProperties.Name="Minimise">
                             <Path Data="{StaticResource IconMinimize}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1" Width="10" Height="10"/>
                         </Button>
@@ -175,6 +272,84 @@
                         </Button>
                         <TextBlock Text="{Binding Message}" VerticalAlignment="Center" FontSize="13.5" TextWrapping="Wrap" LineHeight="20"/>
                     </DockPanel>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="TutorialLayer" Grid.ColumnSpan="2" Background="#99020809" Visibility="Collapsed">
+                <Border Width="560" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="36,30,36,26" CornerRadius="10"
+                        Background="{StaticResource Raised}" BorderBrush="{StaticResource AccentRing}" BorderThickness="1">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="60" ShadowDepth="18" Direction="270" Opacity="0.6" Color="Black"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <Grid>
+                            <Border Width="56" Height="56" CornerRadius="28" HorizontalAlignment="Left" Background="{StaticResource Mark}"
+                                    BorderBrush="{StaticResource AccentRing}" BorderThickness="1">
+                                <Path x:Name="TutorialIcon" Style="{StaticResource Icon}" Stroke="{StaticResource Accent}" Width="24" Height="24" StrokeThickness="1.6"/>
+                            </Border>
+                            <Button Style="{StaticResource Quiet}" HorizontalAlignment="Right" VerticalAlignment="Top" Content="Skip tour" Click="OnTutorialClose"/>
+                        </Grid>
+                        <TextBlock x:Name="TutorialStep" Margin="0,20,0,0" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource AccentText}"/>
+                        <TextBlock x:Name="TutorialTitle" Margin="0,4,0,0" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold"
+                                   FontSize="28" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="TutorialBody" Margin="0,10,0,0" FontSize="14.5" LineHeight="23" TextWrapping="Wrap" Foreground="{StaticResource Soft}"/>
+                        <ItemsControl x:Name="TutorialTips" Margin="0,14,0,0" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,0,0,8">
+                                        <Path Data="{StaticResource IconCheck}" Style="{StaticResource Icon}" Stroke="{StaticResource Accent}" Width="12" Height="12"
+                                              StrokeThickness="2.2" Margin="0,5,12,0" VerticalAlignment="Top"/>
+                                        <TextBlock Text="{Binding}" FontSize="13.5" LineHeight="21" TextWrapping="Wrap" Foreground="{StaticResource Text}"/>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Grid Margin="0,22,0,0">
+                            <ItemsControl x:Name="TutorialDots" VerticalAlignment="Center" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border x:Name="Dot" Width="8" Height="8" Margin="0,0,6,0" CornerRadius="4" Background="{StaticResource Ghost}"/>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding}" Value="True">
+                                                <Setter TargetName="Dot" Property="Width" Value="22"/>
+                                                <Setter TargetName="Dot" Property="Background" Value="{StaticResource Accent}"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button x:Name="TutorialBack" Style="{StaticResource GhostButton}" Content="Back" Margin="0,0,10,0" Click="OnTutorialBack"/>
+                                <Button x:Name="TutorialNext" Style="{StaticResource Primary}" MinWidth="110" Click="OnTutorialNext"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="DialogLayer" Grid.ColumnSpan="2" Background="#B3020809" Visibility="Collapsed">
+                <Border Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24" CornerRadius="10"
+                        Background="{StaticResource Raised}" BorderBrush="{StaticResource Ghost}" BorderThickness="1">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="60" ShadowDepth="18" Direction="270" Opacity="0.6" Color="Black"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <TextBlock x:Name="DialogTitle" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="22" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="DialogText" Margin="0,8,0,0" FontSize="13.5" LineHeight="21" TextWrapping="Wrap" Foreground="{StaticResource Soft}"
+                                   Visibility="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource VisibleWhenSet}}"/>
+                        <TextBox x:Name="DialogInput" Style="{StaticResource Field}" Margin="0,16,0,0" MaxLength="40" TextChanged="OnDialogInput" AutomationProperties.Name="Name"/>
+                        <TextBlock x:Name="DialogHint" Margin="0,8,0,0" FontSize="12.5" TextWrapping="Wrap" Foreground="{StaticResource Danger}"
+                                   Visibility="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource VisibleWhenSet}}"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+                            <Button Style="{StaticResource GhostButton}" Content="Cancel" Margin="0,0,10,0" Click="OnDialogCancel"/>
+                            <Button x:Name="DialogConfirm" Style="{StaticResource Primary}" MinWidth="100" Click="OnDialogConfirm"/>
+                        </StackPanel>
+                    </StackPanel>
                 </Border>
             </Grid>
         </Grid>

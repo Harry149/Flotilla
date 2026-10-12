@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Flotilla.Text;
@@ -18,6 +19,22 @@ public partial class ModPage : UserControl
 
     public event Action? Closed;
     public event Action<ModTile>? InstallRequested;
+    public event Action<string>? TagRequested;
+
+    public string BackLabel
+    {
+        get => BackText.Text;
+        set
+        {
+            BackText.Text = value;
+            AutomationProperties.SetName(BackButton, $"Back to {value}");
+        }
+    }
+
+    void OnTag(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is string tag) TagRequested?.Invoke(tag);
+    }
 
     void ShowDescription()
     {

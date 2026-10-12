@@ -15,4 +15,13 @@ public static class Visuals
         }
         return null;
     }
+
+    public static T? Ancestor<T>(DependencyObject start) where T : DependencyObject
+    {
+        for (DependencyObject? node = start; node is not null; node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
+        {
+            if (node is T match) return match;
+        }
+        return null;
+    }
 }

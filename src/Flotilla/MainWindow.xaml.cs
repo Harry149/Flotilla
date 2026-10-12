@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -10,69 +11,161 @@ namespace Flotilla;
 
 public partial class MainWindow : Window
 {
+    sealed record TourStep(string Icon, string Title, string Body, string[] Tips, bool OnInstalled = false);
+
+    static readonly TourStep[] Tour =
+    [
+        new("IconSonar", "Welcome to Flotilla",
+            "Flotilla finds, installs and organises your UBOAT mods. This tour takes about a minute, and the ? button brings it back whenever you like.",
+            [
+                "Everything you change goes straight into UBOAT's own mod list, so the game and its launcher see it too.",
+                "Close UBOAT and its launcher before changing mods. Flotilla reminds you if you forget.",
+            ]),
+        new("IconBrowse", "Find mods in Browse",
+            "Browse shows every mod on the UBOAT Workshop. The banner at the top shows mods we recommend.",
+            [
+                "Search by name or tag with Ctrl+F. Click a tag on a mod's page to see others like it.",
+                "Sort by popular, recently updated, newest or name. Hide installed shows only what you don't have yet.",
+                "Click a mod to read about it, then press Install. You don't need to sign in to Steam.",
+            ]),
+        new("IconInstalled", "Manage them in Installed",
+            "Installed lists every mod on this PC, in the order UBOAT loads them.",
+            [
+                "Flip the switch to turn a mod on or off. Mods you turn off stay installed.",
+                "Drag the dots on the left to change the load order. When two mods change the same thing, the lower one wins.",
+                "Double-click a mod to open its page. Right-click it to open its folder, see it on the Workshop, or uninstall it.",
+            ], OnInstalled: true),
+        new("IconLayers", "Save setups as profiles",
+            "A profile remembers which mods are on and their order, so you can keep one setup for a full overhaul and another for a lighter game.",
+            [
+                "Turn on the mods you want, then press + next to Profiles in the sidebar.",
+                "Click a profile to switch to it. If a mod in it isn't installed, Flotilla installs it for you.",
+                "The tick shows which profile is on. Right-click a profile to update, rename, reorder or delete it.",
+            ], OnInstalled: true),
+        new("IconUpdate", "Updates and sharing",
+            "Flotilla checks the Workshop every time it starts.",
+            [
+                "A dot next to Installed means updates are ready. Update all gets them in one go.",
+                "Export saves your mods, their versions and their order to a file. A friend can Import it to get the exact same setup.",
+                "Mods you subscribe to in Steam show up here too, and Steam keeps those up to date.",
+            ], OnInstalled: true),
+        new("IconPlay", "Ready to dive",
+            "Press Play UBOAT in the sidebar to start the game through Steam with your mods.",
+            [
+                "A few mods need an account that owns UBOAT or a DLC, so they won't install anonymously. Use Open in Steam on their page and subscribe there, and Flotilla picks them up.",
+                "F5 refreshes the Workshop list. Ctrl+1 and Ctrl+2 switch between Browse and Installed.",
+            ]),
+    ];
+
     readonly Library library = new();
+    readonly Settings settings = Settings.Load();
     ModTile? open;
+    int tourStep = -1;
+    bool clearingSearch;
+    TaskCompletionSource<string?>? dialog;
+    Func<string, string?>? validate;
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = library;
+        RestorePlacement();
 
         Browse.Opened += Open;
         Browse.InstallRequested += library.Install;
         Browse.RetryRequested += () => _ = library.RefreshWorkshopAsync();
         Details.Closed += CloseMod;
         Details.InstallRequested += library.Install;
+        Details.TagRequested += SearchTag;
         InstalledPage.BrowseRequested += () => BrowseTab.IsChecked = true;
+        InstalledPage.OpenRequested += Open;
         library.PropertyChanged += OnLibraryChanged;
 
-        Loaded += async (_, _) => await library.StartAsync();
+        Loaded += async (_, _) =>
+        {
+            if (!settings.TutorialSeen) ShowTour(0);
+            await library.StartAsync();
+        };
         Activated += (_, _) => library.Rescan();
+        SourceInitialized += (_, _) => FitToScreen();
         StateChanged += (_, _) => FitToScreen();
+        Closing += (_, _) => SavePlacement();
     }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
-        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            SearchBox.Focus();
-            SearchBox.SelectAll();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Escape && SearchBox.IsKeyboardFocused && SearchBox.Text.Length > 0)
-        {
-            SearchBox.Clear();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Escape && open is not null && BrowseTab.IsChecked == true)
-        {
-            CloseMod();
-            e.Handled = true;
-        }
+        e.Handled = DialogLayer.IsVisible ? DialogKey(e.Key)
+            : TutorialLayer.IsVisible ? TourKey(e.Key)
+            : ShortcutKey(e.Key == Key.System ? e.SystemKey : e.Key);
         base.OnPreviewKeyDown(e);
+    }
+
+    bool ShortcutKey(Key key)
+    {
+        var control = Keyboard.Modifiers == ModifierKeys.Control;
+        switch (key)
+        {
+            case Key.F when control:
+                SearchBox.Focus();
+                SearchBox.SelectAll();
+                return true;
+            case Key.D1 or Key.NumPad1 when control:
+                BrowseTab.IsChecked = true;
+                CloseMod();
+                return true;
+            case Key.D2 or Key.NumPad2 when control:
+                InstalledTab.IsChecked = true;
+                CloseMod();
+                return true;
+            case Key.F1:
+                ShowTour(0);
+                return true;
+            case Key.F5:
+                library.Status.Say("Refreshing the Workshop list.");
+                _ = library.RefreshWorkshopAsync();
+                return true;
+            case Key.Escape when SearchBox.IsKeyboardFocused && SearchBox.Text.Length > 0:
+                SearchBox.Clear();
+                return true;
+            case Key.Escape when open is not null:
+                CloseMod();
+                return true;
+            default:
+                return false;
+        }
     }
 
     void OnLibraryChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(Library.Tiles))
-            SearchBox.Tag = library.Tiles.Count > 0 ? $"Search {library.Tiles.Count:N0} mods" : "Search mods";
+        if (e.PropertyName == nameof(Library.Tiles)) UpdateSearchHint();
     }
+
+    void UpdateSearchHint() =>
+        SearchBox.Tag = InstalledTab.IsChecked == true ? "Search installed mods"
+            : library.Tiles.Count > 0 ? $"Search {library.Tiles.Count:N0} mods"
+            : "Search mods";
 
     void OnSearch(object sender, TextChangedEventArgs e)
     {
-        if (open is not null || BrowseTab.IsChecked != true)
-        {
-            open = null;
-            BrowseTab.IsChecked = true;
-            ShowView();
-        }
-        Browse.Filter(SearchBox.Text);
+        if (clearingSearch) return;
+        if (open is not null) CloseMod();
+
+        if (InstalledTab.IsChecked == true) InstalledPage.Filter(SearchBox.Text);
+        else Browse.Filter(SearchBox.Text);
+    }
+
+    void SearchTag(string tag)
+    {
+        BrowseTab.IsChecked = true;
+        CloseMod();
+        SearchBox.Text = tag;
     }
 
     void Open(ModTile tile)
     {
         open = tile;
         Details.DataContext = tile;
+        Details.BackLabel = InstalledTab.IsChecked == true ? "Installed" : "Browse";
         ShowView();
     }
 
@@ -82,15 +175,28 @@ public partial class MainWindow : Window
         ShowView();
     }
 
-    void OnTabChanged(object sender, RoutedEventArgs e) => ShowView();
+    void OnTabClick(object sender, RoutedEventArgs e) => CloseMod();
+
+    void OnTabChanged(object sender, RoutedEventArgs e)
+    {
+        if (InstalledPage is null) return;
+
+        clearingSearch = true;
+        SearchBox.Clear();
+        clearingSearch = false;
+        Browse.Filter("");
+        InstalledPage.Filter("");
+        UpdateSearchHint();
+        ShowView();
+    }
 
     void ShowView()
     {
         if (InstalledPage is null) return;
 
         var installed = InstalledTab.IsChecked == true;
-        Reveal(InstalledPage, installed);
-        Reveal(Details, !installed && open is not null);
+        Reveal(Details, open is not null);
+        Reveal(InstalledPage, installed && open is null);
         Reveal(Browse, !installed && open is null);
     }
 
@@ -106,6 +212,233 @@ public partial class MainWindow : Window
     void OnPlay(object sender, RoutedEventArgs e) => library.PlayGame();
 
     void OnDismissToast(object sender, RoutedEventArgs e) => library.Status.Dismiss();
+
+    void OnHelp(object sender, RoutedEventArgs e) => ShowTour(0);
+
+    void ShowTour(int step)
+    {
+        tourStep = Math.Clamp(step, 0, Tour.Length - 1);
+        var page = Tour[tourStep];
+
+        TutorialIcon.Data = (Geometry)FindResource(page.Icon);
+        TutorialStep.Text = $"Step {tourStep + 1} of {Tour.Length}";
+        TutorialTitle.Text = page.Title;
+        TutorialBody.Text = page.Body;
+        TutorialTips.ItemsSource = page.Tips;
+        TutorialDots.ItemsSource = Enumerable.Range(0, Tour.Length).Select(i => i == tourStep).ToList();
+        TutorialBack.Visibility = tourStep > 0 ? Visibility.Visible : Visibility.Collapsed;
+        TutorialNext.Content = tourStep == Tour.Length - 1 ? "Let's go" : "Next";
+
+        (page.OnInstalled ? InstalledTab : BrowseTab).IsChecked = true;
+        CloseMod();
+
+        if (!TutorialLayer.IsVisible) Reveal(TutorialLayer, true);
+        TutorialNext.Focus();
+    }
+
+    void CloseTour()
+    {
+        TutorialLayer.Visibility = Visibility.Collapsed;
+        tourStep = -1;
+        if (settings.TutorialSeen) return;
+
+        settings.TutorialSeen = true;
+        settings.Save();
+        BrowseTab.IsChecked = true;
+    }
+
+    bool TourKey(Key key)
+    {
+        switch (key)
+        {
+            case Key.Escape: CloseTour(); return true;
+            case Key.Right or Key.Enter: OnTutorialNext(this, new RoutedEventArgs()); return true;
+            case Key.Left when tourStep > 0: ShowTour(tourStep - 1); return true;
+            default: return key is not (Key.Tab or Key.Space);
+        }
+    }
+
+    void OnTutorialNext(object sender, RoutedEventArgs e)
+    {
+        if (tourStep >= Tour.Length - 1) CloseTour();
+        else ShowTour(tourStep + 1);
+    }
+
+    void OnTutorialBack(object sender, RoutedEventArgs e) => ShowTour(tourStep - 1);
+
+    void OnTutorialClose(object sender, RoutedEventArgs e) => CloseTour();
+
+    Task<string?> Ask(string title, string text, string confirm, string? input = null, bool danger = false, Func<string, string?>? check = null)
+    {
+        dialog?.TrySetResult(null);
+        dialog = new TaskCompletionSource<string?>();
+        validate = check;
+
+        DialogTitle.Text = title;
+        DialogText.Text = text;
+        DialogHint.Text = "";
+        DialogConfirm.Content = confirm;
+        DialogConfirm.Style = (Style)FindResource(danger ? "DangerButton" : "Primary");
+        DialogInput.Visibility = input is null ? Visibility.Collapsed : Visibility.Visible;
+        DialogInput.Text = input ?? "";
+        CheckDialogInput();
+
+        Reveal(DialogLayer, true);
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (input is null) DialogConfirm.Focus();
+            else
+            {
+                DialogInput.Focus();
+                DialogInput.SelectAll();
+            }
+        });
+        return dialog.Task;
+    }
+
+    void CloseDialog(string? result)
+    {
+        DialogLayer.Visibility = Visibility.Collapsed;
+        var pending = dialog;
+        dialog = null;
+        pending?.TrySetResult(result);
+    }
+
+    bool DialogKey(Key key)
+    {
+        switch (key)
+        {
+            case Key.Escape: CloseDialog(null); return true;
+            case Key.Enter when DialogConfirm.IsEnabled: CloseDialog(DialogInput.Text.Trim()); return true;
+            default: return false;
+        }
+    }
+
+    void OnDialogInput(object sender, TextChangedEventArgs e) => CheckDialogInput();
+
+    void CheckDialogInput()
+    {
+        if (DialogInput.Visibility != Visibility.Visible)
+        {
+            DialogConfirm.IsEnabled = true;
+            return;
+        }
+
+        var text = DialogInput.Text.Trim();
+        var problem = text.Length == 0 ? "" : validate?.Invoke(text) ?? "";
+        DialogHint.Text = problem;
+        DialogConfirm.IsEnabled = text.Length > 0 && problem.Length == 0;
+    }
+
+    void OnDialogConfirm(object sender, RoutedEventArgs e) => CloseDialog(DialogInput.Text.Trim());
+
+    void OnDialogCancel(object sender, RoutedEventArgs e) => CloseDialog(null);
+
+    async void OnNewProfile(object sender, RoutedEventArgs e)
+    {
+        var on = library.Installed.Count(m => m.Enabled && m.Source != Mods.ModSource.Missing);
+        var text = on switch
+        {
+            0 => "No mods are switched on, so this profile starts empty. Switching to it turns every mod off.",
+            1 => "Saves the 1 mod that's switched on, and its place in the load order.",
+            _ => $"Saves the {on} mods that are switched on, and their load order.",
+        };
+        var name = await Ask("New profile", text, "Save profile", SuggestName(),
+            check: n => library.FindProfile(n) is not null ? $"You already have a profile called {n}. Right-click it to update it instead." : null);
+        if (name is { Length: > 0 }) library.SaveProfile(name);
+    }
+
+    string SuggestName()
+    {
+        for (var i = library.Profiles.Count + 1; ; i++)
+        {
+            var name = $"Profile {i}";
+            if (library.FindProfile(name) is null) return name;
+        }
+    }
+
+    static ProfileItem? ProfileOf(object sender) => ((FrameworkElement)sender).DataContext as ProfileItem;
+
+    void OnProfileApply(object sender, RoutedEventArgs e)
+    {
+        if (ProfileOf(sender) is { } item) library.ApplyProfile(item);
+    }
+
+    async void OnProfileUpdate(object sender, RoutedEventArgs e)
+    {
+        if (ProfileOf(sender) is not { } item) return;
+
+        var on = library.Installed.Count(m => m.Enabled && m.Source != Mods.ModSource.Missing);
+        var answer = await Ask($"Update {item.Name}?",
+            $"It will hold the {on} {(on == 1 ? "mod" : "mods")} that {(on == 1 ? "is" : "are")} switched on now, in their current order, instead of its {item.Count}.", "Update");
+        if (answer is not null) library.UpdateProfile(item);
+    }
+
+    async void OnProfileRename(object sender, RoutedEventArgs e)
+    {
+        if (ProfileOf(sender) is not { } item) return;
+
+        var name = await Ask("Rename profile", "", "Rename", item.Name,
+            check: n => library.FindProfile(n) is { } other && other != item ? $"You already have a profile called {n}." : null);
+        if (name is { Length: > 0 }) library.RenameProfile(item, name);
+    }
+
+    async void OnProfileDelete(object sender, RoutedEventArgs e)
+    {
+        if (ProfileOf(sender) is not { } item) return;
+
+        var answer = await Ask($"Delete {item.Name}?", "Only the profile is deleted. Your mods stay installed, and the ones that are on stay on.", "Delete", danger: true);
+        if (answer is not null) library.DeleteProfile(item);
+    }
+
+    void OnProfileUp(object sender, RoutedEventArgs e)
+    {
+        if (ProfileOf(sender) is { } item) library.MoveProfile(item, library.Profiles.IndexOf(item) - 1);
+    }
+
+    void OnProfileDown(object sender, RoutedEventArgs e)
+    {
+        if (ProfileOf(sender) is { } item) library.MoveProfile(item, library.Profiles.IndexOf(item) + 1);
+    }
+
+    void OnProfileMore(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { ContextMenu: { } menu } button) return;
+
+        menu.DataContext = button.DataContext;
+        menu.PlacementTarget = button;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    void RestorePlacement()
+    {
+        if (settings.Width < MinWidth || settings.Height < MinHeight) return;
+
+        var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        var bounds = new Rect(settings.Left, settings.Top, settings.Width, settings.Height);
+        if (!screen.IntersectsWith(bounds) || Rect.Intersect(screen, bounds).Width < 200) return;
+
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = bounds.Left;
+        Top = bounds.Top;
+        Width = bounds.Width;
+        Height = bounds.Height;
+        if (settings.Maximized) WindowState = WindowState.Maximized;
+    }
+
+    void SavePlacement()
+    {
+        var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+        if (bounds.IsEmpty) return;
+
+        settings.Left = bounds.Left;
+        settings.Top = bounds.Top;
+        settings.Width = bounds.Width;
+        settings.Height = bounds.Height;
+        settings.Maximized = WindowState == WindowState.Maximized;
+        settings.Save();
+    }
 
     void FitToScreen()
     {
