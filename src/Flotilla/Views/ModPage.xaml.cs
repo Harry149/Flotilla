@@ -22,6 +22,34 @@ public partial class ModPage : UserControl
     public event Action<string>? TagRequested;
     public event Action<ModTile>? AuthorRequested;
     public event Action<ModTile>? OpenRequested;
+    public event Action<ModTile, bool>? VoteRequested;
+
+    public sealed record NewsRow(string Date, string Text);
+
+    public void ShowNews(IEnumerable<Steam.ChangeNote> notes)
+    {
+        var rows = notes.Where(n => n.Text.Length > 0).Take(4)
+            .Select(n => new NewsRow(n.Time.ToLocalTime().ToString("d MMM yyyy"), n.Text.Length > 360 ? n.Text[..360].TrimEnd() + "…" : n.Text))
+            .ToList();
+        NewsList.ItemsSource = rows;
+        News.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public void ShowGameVersion(string? version)
+    {
+        VoteQuestion.Text = version is null ? "Does it work on your UBOAT?" : $"Does it work on UBOAT {version}?";
+        VoteCard.Visibility = Sailors.Enabled ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void OnVoteWorks(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is ModTile tile) VoteRequested?.Invoke(tile, true);
+    }
+
+    void OnVoteBroken(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is ModTile tile) VoteRequested?.Invoke(tile, false);
+    }
 
     public void ShowRequirements(IReadOnlyList<RequirementRow> rows)
     {

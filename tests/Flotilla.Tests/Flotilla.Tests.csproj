@@ -13,6 +13,11 @@
     <Compile Include="../../src/Flotilla/Web.cs" />
     <Compile Include="../../src/Flotilla/Featured.cs" />
     <Compile Include="../../src/Flotilla/Updater.cs" />
+    <Compile Include="../../src/Flotilla/Sailors.cs" />
+    <Compile Include="../../src/Flotilla/ErrorReports.cs" />
+    <Compile Include="../../src/Flotilla/Community.cs" />
+    <Compile Include="../../src/Flotilla/Paths.cs" />
+    <Compile Include="../../src/Flotilla/Settings.cs" />
     <Compile Include="../../src/Flotilla/Mods/*.cs" />
     <Compile Include="../../src/Flotilla/Steam/*.cs" />
     <Compile Include="../../src/Flotilla/Text/BBCode.cs" />

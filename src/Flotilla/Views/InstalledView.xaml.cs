@@ -30,10 +30,69 @@ public partial class InstalledView : UserControl
     {
         InitializeComponent();
         edgeScroll.Tick += (_, _) => EdgeScroll();
+        DataContextChanged += (_, e) =>
+        {
+            if (e.NewValue is Library library)
+                library.PropertyChanged += (_, change) =>
+                {
+                    if (change.PropertyName is nameof(Library.BisectTitle)) ShowBisectButtons();
+                };
+        };
     }
 
     public event Action? BrowseRequested;
     public event Action<ModTile>? OpenRequested;
+    public event Action? HistoryRequested;
+    public event Action? FindBrokenRequested;
+    public event Action? ShareRequested;
+    public event Action? UseCodeRequested;
+    public event Action<InstalledMod>? SettingsRequested;
+    public event Action<InstalledMod>? UpdateRequested;
+
+    void OnHistory(object sender, RoutedEventArgs e) => HistoryRequested?.Invoke();
+
+    void OnFindBroken(object sender, RoutedEventArgs e) => FindBrokenRequested?.Invoke();
+
+    void OnShare(object sender, RoutedEventArgs e) => ShareRequested?.Invoke();
+
+    void OnUseCode(object sender, RoutedEventArgs e) => UseCodeRequested?.Invoke();
+
+    void OnMore(object sender, RoutedEventArgs e)
+    {
+        if (MoreButton.ContextMenu is not { } menu) return;
+        menu.DataContext = DataContext;
+        menu.PlacementTarget = MoreButton;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    void OnModSettings(object sender, RoutedEventArgs e)
+    {
+        if (ModOf(sender) is { } mod) SettingsRequested?.Invoke(mod);
+    }
+
+    async void OnRollBack(object sender, RoutedEventArgs e)
+    {
+        if (ModOf(sender) is { } mod) await Library.RollBackAsync(mod);
+    }
+
+    void OnBisectPlay(object sender, RoutedEventArgs e) => Library.PlayGame();
+
+    void OnStillBroken(object sender, RoutedEventArgs e) => Library.AnswerBisect(stillBroken: true);
+
+    void OnFixed(object sender, RoutedEventArgs e) => Library.AnswerBisect(stillBroken: false);
+
+    void OnKeepOff(object sender, RoutedEventArgs e) => Library.StopBisect(turnOffCulprit: true);
+
+    void OnStopBisect(object sender, RoutedEventArgs e) => Library.StopBisect();
+
+    void ShowBisectButtons()
+    {
+        if (DataContext is not Library library) return;
+        var found = library.BisectFound;
+        StillBroken.Visibility = Fixed.Visibility = found ? Visibility.Collapsed : Visibility.Visible;
+        KeepOff.Visibility = found ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     Library Library => (Library)DataContext;
 
@@ -114,7 +173,7 @@ public partial class InstalledView : UserControl
 
     void OnUpdate(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is InstalledMod { Tile: { } tile }) Library.Install(tile);
+        if (((FrameworkElement)sender).DataContext is InstalledMod { Tile: { } } mod) UpdateRequested?.Invoke(mod);
     }
 
     void OnMoveTop(object sender, RoutedEventArgs e) => MoveTo(sender, 0);

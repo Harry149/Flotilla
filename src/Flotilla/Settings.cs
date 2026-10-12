@@ -18,11 +18,15 @@ public sealed class Settings
     public bool CheckForUpdates { get; set; } = true;
     public bool InstallRequirements { get; set; } = true;
     public bool WarnGameVersion { get; set; } = true;
-    public bool CheckGameLog { get; set; } = true;
+    public bool CheckGameLog { get; set; }
+    public bool SendErrorReports { get; set; } = true;
+    public bool CountMe { get; set; } = true;
+    public string InstallId { get; set; } = Guid.NewGuid().ToString("N");
     public string? DataFolder { get; set; }
     public string? GameVersion { get; set; }
     public DateTime LogChecked { get; set; }
     public List<ulong> Favourites { get; set; } = [];
+    public Dictionary<string, bool> Votes { get; set; } = [];
 
     public static Settings Load()
     {

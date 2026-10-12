@@ -90,7 +90,7 @@
                         <StackPanel>
                             <TextBlock Text="Check the game log after you play" Style="{StaticResource Label}"/>
                             <TextBlock Style="{StaticResource Hint}"
-                                       Text="Reads UBOAT's log when you come back to Flotilla and marks mods that failed to compile or threw errors from their own files, so you know which one broke."/>
+                                       Text="When UBOAT closes, Flotilla reads its log for mods that failed to compile, crashed, failed to load or logged their own errors, tells you which one, and offers to save an error log you can send to the mod's author. Off unless you turn it on. Keep Flotilla open while you play so it can check straight away."/>
                         </StackPanel>
                     </DockPanel>
                 </StackPanel>
@@ -109,6 +109,26 @@
                                 <Button Style="{StaticResource GhostButton}" Height="32" Padding="14,0" FontSize="13" Content="Check now" Click="OnCheckUpdates"/>
                                 <Button Style="{StaticResource GhostButton}" Height="32" Padding="14,0" FontSize="13" Margin="10,0,0,0" Content="Show the tour" Click="OnTour"/>
                             </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource Rule}"/>
+                    <DockPanel Style="{StaticResource Option}">
+                        <ToggleButton DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,2,0,0"
+                                      IsChecked="{Binding Settings.CountMe}" Click="OnCountMe" AutomationProperties.Name="Count me as a sailor"/>
+                        <StackPanel>
+                            <TextBlock Text="Count me as a sailor" Style="{StaticResource Label}"/>
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="While Flotilla is open, it sends Flotilla's server a random ID made on this PC and the Flotilla version every few minutes, so the top bar can show how many people have it open. Nothing else is sent: no name, Steam account or mod list."/>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource Rule}"/>
+                    <DockPanel Style="{StaticResource Option}">
+                        <ToggleButton DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,2,0,0"
+                                      IsChecked="{Binding Settings.SendErrorReports}" Click="OnChanged" AutomationProperties.Name="Send Flotilla's error reports"/>
+                        <StackPanel>
+                            <TextBlock Text="Send Flotilla's error reports" Style="{StaticResource Label}"/>
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="If Flotilla itself hits an error, it sends me the error log so I can fix it: the Flotilla and Windows version and the technical details of the error. Your Windows username is removed first. Nothing about your mods or game log is sent."/>
                         </StackPanel>
                     </DockPanel>
                 </StackPanel>

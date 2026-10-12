@@ -229,7 +229,7 @@ public sealed class SteamCmd(string root)
         return pins;
     }
 
-    void Pin(ulong id, ulong manifest)
+    public void Pin(ulong id, ulong manifest)
     {
         var pins = ReadPins();
         pins[id] = manifest;

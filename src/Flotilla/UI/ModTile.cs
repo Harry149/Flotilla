@@ -59,6 +59,28 @@ public sealed class ModTile : Observable
 
     public void LoadFavourite(bool value) => Set(ref favourite, value, nameof(IsFavourite));
 
+    public VoteCount? Votes { get; private set; }
+    public bool? MyVote { get; private set; }
+    public bool HasVotes => Votes is { Total: >= 3 };
+    public string VoteBadge => Votes is { } v ? $"{v.Percent}%" : "";
+    public bool VotesMostlyBroken => Votes is { Total: >= 3, Percent: < 60 };
+    public string VoteSummary => Votes switch
+    {
+        null or { Total: 0 } => "No one has said yet. Be the first.",
+        { Total: 1 } v => v.Works == 1 ? "1 sailor says it works." : "1 sailor says it's broken.",
+        var v => $"{v.Works} of {v.Total} sailors say it works ({v.Percent}%).",
+    };
+    public bool VotedWorks => MyVote == true;
+    public bool VotedBroken => MyVote == false;
+
+    public void ShowVotes(VoteCount? votes, bool? mine)
+    {
+        Votes = votes;
+        MyVote = mine;
+        foreach (var name in new[] { nameof(Votes), nameof(MyVote), nameof(HasVotes), nameof(VoteBadge), nameof(VotesMostlyBroken), nameof(VoteSummary), nameof(VotedWorks), nameof(VotedBroken) })
+            Raise(name);
+    }
+
     public bool HasAuthor => Item.Creator != 0;
 
     public string Author

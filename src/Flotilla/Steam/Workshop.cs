@@ -16,6 +16,7 @@ public sealed class Workshop(HttpClient http)
     const int PagesAtOnce = 4;
 
     static readonly Regex ItemLink = new(@"sharedfiles/filedetails/\?id=(\d+)", RegexOptions.Compiled);
+    static readonly Regex ChangeEntry = new(@"<p id=""(\d{9,11})"">(.*?)</p>", RegexOptions.Compiled | RegexOptions.Singleline);
 
     public async Task<List<ulong>> ListAsync(CancellationToken cancel = default)
     {
@@ -60,6 +61,16 @@ public sealed class Workshop(HttpClient http)
 
     public async Task<List<ulong>> RequirementsAsync(ulong id, CancellationToken cancel = default) =>
         Requirements.Parse(await Retry(() => http.GetStringAsync($"https://steamcommunity.com/sharedfiles/filedetails/?id={id}", cancel), cancel), id);
+
+    public async Task<List<ChangeNote>> ChangeNotesAsync(ulong id, CancellationToken cancel = default) =>
+        ParseChangeNotes(await Retry(() => http.GetStringAsync($"https://steamcommunity.com/sharedfiles/filedetails/changelog/{id}", cancel), cancel));
+
+    public static List<ChangeNote> ParseChangeNotes(string html) =>
+        ChangeEntry.Matches(html)
+            .Select(m => new ChangeNote(
+                DateTimeOffset.FromUnixTimeSeconds(long.Parse(m.Groups[1].Value)).UtcDateTime,
+                WebUtility.HtmlDecode(Regex.Replace(Regex.Replace(m.Groups[2].Value, @"<br\s*/?>", "\n", RegexOptions.IgnoreCase), "<[^>]+>", "")).Trim()))
+            .ToList();
 
     public static IEnumerable<ulong> ParseIds(string html) =>
         ItemLink.Matches(html).Select(m => ulong.Parse(m.Groups[1].Value));

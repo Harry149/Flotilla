@@ -146,6 +146,21 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                    <Border x:Name="VoteCard" Margin="0,0,0,16" Padding="18,14,18,16" CornerRadius="6"
+                            Background="{StaticResource Card}" BorderBrush="{StaticResource CardLine}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock x:Name="VoteQuestion" Text="Does it work on your UBOAT?" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding VoteSummary}" Margin="0,4,0,12" FontSize="12.5" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/>
+                            <UniformGrid Columns="2">
+                                <ToggleButton Style="{StaticResource PillToggle}" Margin="0,0,6,0" HorizontalContentAlignment="Center"
+                                              IsChecked="{Binding VotedWorks, Mode=OneWay}" Click="OnVoteWorks" Content="It works"
+                                              ToolTip="Tell other sailors it works on your version of UBOAT"/>
+                                <ToggleButton Style="{StaticResource PillToggle}" Margin="6,0,0,0" HorizontalContentAlignment="Center"
+                                              IsChecked="{Binding VotedBroken, Mode=OneWay}" Click="OnVoteBroken" Content="It's broken"
+                                              ToolTip="Warn other sailors it's broken on your version of UBOAT"/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
                     <Border x:Name="Needs" Margin="0,0,0,16" Padding="18,14,18,8" CornerRadius="6" Visibility="Collapsed"
                             Background="{StaticResource Card}" BorderBrush="{StaticResource AccentRing}" BorderThickness="1">
                         <StackPanel>
@@ -195,6 +210,22 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                    </Border>
+                    <Border x:Name="News" Margin="0,16,0,0" Padding="18,14,18,8" CornerRadius="6" Visibility="Collapsed"
+                            Background="{StaticResource Card}" BorderBrush="{StaticResource CardLine}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="What's new" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15"/>
+                            <ItemsControl x:Name="NewsList" Margin="0,6,0,0" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,6,0,8">
+                                            <TextBlock Text="{Binding Date}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentText}"/>
+                                            <TextBlock Text="{Binding Text}" Margin="0,3,0,0" FontSize="12.5" LineHeight="18" TextWrapping="Wrap" Foreground="{StaticResource Soft}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
                     </Border>
                     </StackPanel>
                 </Grid>

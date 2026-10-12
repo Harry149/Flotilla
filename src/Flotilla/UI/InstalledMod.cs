@@ -33,6 +33,8 @@ public sealed class InstalledMod(ModFolder folder) : Observable
     }
 
     public bool IsError { get; set => Set(ref field, value); }
+    public bool HasSettings { get; set => Set(ref field, value); }
+    public string? RollbackNote { get; set => Set(ref field, value); }
     public bool CanFix { get; set => Set(ref field, value); }
 
     public string Summary => Issue?.Split('\n')[0] ?? Details;

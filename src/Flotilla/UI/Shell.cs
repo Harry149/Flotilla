@@ -18,6 +18,15 @@ public static class Shell
         }
     }
 
+    public static void Select(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose();
+        }
+        catch (Win32Exception) { }
+    }
+
     public static void OpenInSteam(ulong id)
     {
         if (!Open($"steam://url/CommunityFilePage/{id}"))

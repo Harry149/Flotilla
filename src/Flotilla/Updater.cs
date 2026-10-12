@@ -13,6 +13,7 @@ public sealed record Update(string Version, string Notes, string Page, string Do
 public sealed class Updater(HttpClient http)
 {
     const string LatestRelease = "https://api.github.com/repos/Harry149/Flotilla/releases/latest";
+    const string Releases = "https://api.github.com/repos/Harry149/Flotilla/releases?per_page=100";
     const string AssetName = "Flotilla.exe";
 
     static readonly Regex Number = new(@"(\d+)\.(\d+)(?:\.(\d+))?([a-z])?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -52,6 +53,26 @@ public sealed class Updater(HttpClient http)
         {
             return false;
         }
+    }
+
+    public async Task<long?> DownloadsAsync()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, Releases);
+        request.Headers.Accept.ParseAdd("application/vnd.github+json");
+        using var response = await http.SendAsync(request);
+        return response.IsSuccessStatusCode ? CountDownloads(await response.Content.ReadAsStringAsync()) : null;
+    }
+
+    public static long CountDownloads(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != JsonValueKind.Array) return 0;
+
+        return document.RootElement.EnumerateArray()
+            .Where(release => release.TryGet("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+            .SelectMany(release => release.GetProperty("assets").EnumerateArray())
+            .Where(asset => asset.Text("name").Equals(AssetName, StringComparison.OrdinalIgnoreCase))
+            .Sum(asset => asset.Number("download_count"));
     }
 
     public static Update? Parse(string json)

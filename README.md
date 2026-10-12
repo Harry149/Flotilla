@@ -43,11 +43,25 @@ Flotilla rewrites that file whenever you change something, keeping its line endi
 
 **Required mods** come from the "Required items" list on each mod's Workshop page, cached for three days in `%LOCALAPPDATA%\Flotilla\requirements.json`. Installing a mod installs what it needs and loads those first. On Installed, a mod whose requirement is missing, switched off or loads after it gets a yellow note and a Fix button. A mod's page lists what it needs.
 
-**Version and error warnings.** UBOAT writes its version (`Game version: 2026.1 Patch 21`) at the top of `output_log.txt`. A mod whose manifest names neither that release (`2026.1`) nor that exact patch gets a note, like the launcher's "outdated!". When you come back from a game, Flotilla reads the log and marks mods that failed to compile (`...\Mods\<mod>\Source\File.cs(31,23): error CS1501`) or logged an error from their own folder. Errors in a mod that's been updated since are ignored.
+**Version and error warnings.** UBOAT writes its version (`Game version: 2026.1 Patch 21`) at the top of `output_log.txt`. A mod whose manifest names neither that release (`2026.1`) nor that exact patch gets a note, like the launcher's "outdated!". With **Check the game log after you play** switched on in Settings (it's off by default), Flotilla watches for UBOAT closing and reads the newest `output_log*.txt` a couple of seconds later. It looks for compile errors, exceptions and their stack traces, failed assembly loads and Harmony patches, and the `[Tag] ERROR` lines mods write. Each problem is pinned on a mod by its folder path, the namespaces in its source and DLLs, or the log tag it uses. If an enabled mod logged an error, a pop-up names it and offers to save the full error log to Downloads. Closing Flotilla while UBOAT runs asks first, because the check can't happen then. Errors in a mod that's been updated since are ignored.
+
+**Error reports.** If Flotilla itself crashes, it sends the error log (Flotilla and Windows version plus the exception, with the Windows username removed) to the Worker's `/report` endpoint, which posts it as a `.txt` file to the Discord webhook in the Worker secret `WEBHOOK_URL` (a `https://discord.com/api/webhooks/...` address), waiting and retrying once if Discord rate-limits it. Reports that can't be sent wait in `%LOCALAPPDATA%\Flotilla\unsent reports` for the next start. Switch it off in Settings.
 
 **Play UBOAT** empties UBOAT's `Cache`, `Temp` and `Data Sheets` folders first (textures, compiled mod code and compiled data sheets, which the game rebuilds), so leftovers from old or removed mods can't come back. Turn it off in Settings.
 
 **Settings** holds the switches for all of the above, update checks, a different UBOAT data folder, and shortcuts to the data, Mods and Flotilla folders and the game log. Favourites (the star on a mod) are kept there too.
+
+**Share codes.** Share on Installed (or Share it with a code on a profile) uploads the mod list, the same text Export writes, to the Flotilla API and returns a code like `FLT-8K2QR7` and a link, `https://flotilla-api.tyrrh019-851.workers.dev/s/8K2QR7`. The link opens a page listing the mods, with a button that opens `flotilla://setup/8K2QR7`; Flotilla registers that scheme for the current user when the published exe runs, and a second copy hands the link to the one already open. Use a code shows what would change (mods to install, switch on or off, versions, order) before matching it, then saves the setup as a profile.
+
+**History and rollback.** Every change to which mods are on, their order or their versions is saved to `history.json` (the last 40, quick changes merged), and Restore puts a setup back, downloading other versions where needed. Before updating a mod it installed, Flotilla copies the old version to `backups\<id>` (mods over 1.5 GB keep only the version number), so Roll back to the previous version on the mod's menu can swap it back and pin that version.
+
+**Find a broken mod** (beta) splits the switched-on mods in half, keeping a mod and what it needs together, and asks after each game whether the problem is still there. It saves its progress, so closing Flotilla mid-way is fine, and Stop restores the original setup.
+
+**Works on my version.** A mod's page asks whether it works on your UBOAT version. Votes are one per install, mod and game version; cards show the share that says it works once three people have voted.
+
+**Mod settings.** Config files in UBOAT's folder and `ModData` are linked to the mod whose source or DLLs mention them. The gear on a mod shows each `key=value` or JSON setting as a switch or a box, with the comment above it as its description, and saving only changes the edited values.
+
+**What's new** on a mod's page, and in the prompt before updating, comes from the mod's Workshop change notes.
 
 **Updating Flotilla itself** happens on launch: Flotilla asks GitHub for the latest release of this repo, and if its version is newer than the one running, it offers to update. Saying yes downloads that release's `Flotilla.exe`, checks its size and SHA-256 against what GitHub reports, swaps it in place of the running copy (the old one is kept as `Flotilla.exe.old` until the next start) and restarts. Drafts and pre-releases are never offered. To ship an update:
 

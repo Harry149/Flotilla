@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -149,7 +150,11 @@ public partial class WorkshopView : UserControl
         Refresh();
     }
 
-    void OnCard(object sender, RoutedEventArgs e) => Raise(Opened, sender);
+    void OnCard(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is ToggleButton) return;
+        Raise(Opened, sender);
+    }
 
     void OnHeroOpen(object sender, RoutedEventArgs e) => Raise(Opened, sender);
 

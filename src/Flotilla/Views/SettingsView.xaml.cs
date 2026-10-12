@@ -30,10 +30,17 @@ public partial class SettingsView : UserControl
     public event Action? TourRequested;
     public event Action? UpdateCheckRequested;
     public event Action? RestartRequested;
+    public event Action? CountMeChanged;
 
     Library Library => (Library)DataContext;
 
     void OnChanged(object sender, RoutedEventArgs e) => Library.SettingsChanged();
+
+    void OnCountMe(object sender, RoutedEventArgs e)
+    {
+        Library.SettingsChanged();
+        CountMeChanged?.Invoke();
+    }
 
     void OnClearCache(object sender, RoutedEventArgs e)
     {

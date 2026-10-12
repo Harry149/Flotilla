@@ -88,6 +88,9 @@ Requirements.Save(requirementsFile, new() { [7] = new([1, 2], new DateTime(2026,
 Check(Requirements.Load(requirementsFile)[7].Ids.SequenceEqual([1UL, 2UL]), "required items are cached and read back");
 
 Console.WriteLine("Game log");
+var fingerprints = new ModFingerprints(
+    new() { ["PinguMP"] = "steam:3815285055", ["NoseDown.Patches"] = "nosedown", ["UBOAT"] = "nobody" },
+    new() { ["PinguMP"] = "steam:3815285055", ["Nose Down"] = "nosedown" });
 var log = GameLog.Parse([
     @"C:\Users\x\AppData\LocalLow\Deep Water Studio\UBOAT\Mods\3815285055\Source\MpMenuTab.Language.cs(31,23): error CS1501: No overload for method 'OpenPage' takes 2 arguments",
     @"C:\Users\x\AppData\LocalLow\Deep Water Studio\UBOAT\Mods\3815285055\Source\NzoUniformCompat.cs(807,13): warning CS0162: Unreachable code detected",
@@ -95,15 +98,84 @@ var log = GameLog.Parse([
     "Game version: 2026.1 Patch 21",
     @"D:\SteamLibrary\steamapps\workshop\content\494840\2114304535\Source\Patch.cs(5,1): error CS0246: The type 'Foo' could not be found",
     "NullReferenceException: Object reference not set to an instance of an object",
+    "  at UBOAT.Game.Scene.Entities.Ship.Update () [0x00012] in <abc>:0",
+    "",
+    "ArgumentOutOfRangeException: Index was out of range.",
+    "  at System.Collections.Generic.List`1[T].get_Item (System.Int32 index) [0x00009] in <abc>:0",
+    "  at NoseDown.Patches.TrimPatch.Postfix (UBOAT.Game.Scene.Entities.Ship __instance) [0x0001c] in <def>:0",
+    "  at (wrapper dynamic-method) UBOAT.Game.Scene.Entities.Ship.DMD<Update>(UBOAT.Game.Scene.Entities.Ship)",
+    "[PinguMP] ERROR: Build check: OLD CACHED BUILD: the mod folder holds 1.11.5",
+    "[PinguMP] WARN: Face render failed for 8df2#Cap",
+    "[PinguMP] Session stopped (Joining): Protocol mismatch with the host.",
+    "[PinguMP] HEARTBEAT Joined OwnBoats | fps 109.6 | clock error 0.00 s, waves 0.00 s",
+    "[PinguMP] Settings loaded: errors shown in chat = true",
     @"[NoseDown] config loaded from C:/Users/x/AppData/LocalLow/Deep Water Studio/UBOAT\NoseDownConfig.txt",
-]);
+    "Could not load file or assembly 'SomeLib, Version=1.0.0.0' or one of its dependencies.",
+], fingerprints);
 Check(log.GameVersion == "2026.1 Patch 21", "reads the game version");
-Check(log.Errors["3815285055"].SequenceEqual(["it failed to compile (CS1501: No overload for method 'OpenPage' takes 2 arguments)"]), "a compile error is pinned on its mod once, and warnings are ignored");
-Check(log.Errors.ContainsKey("steam:2114304535"), "an error in a Steam subscription is pinned on it");
-Check(log.Errors.Count == 2 && log.Unattributed == 1, "errors that don't name a mod are only counted");
+Check(log.Errors("3815285055").Select(p => p.Summary).SequenceEqual(["it failed to compile (CS1501: No overload for method 'OpenPage' takes 2 arguments)"]), "a compile error is pinned on its mod once, and compiler warnings are ignored");
+Check(log.Errors("steam:2114304535").Any(), "an error in a Steam subscription is pinned on it");
+Check(log.Errors("nosedown").Single() is { Summary: "ArgumentOutOfRangeException: Index was out of range.", Lines.Count: 4 }, "an exception is pinned on the mod whose code is in its stack trace, with the trace kept");
+Check(log.Errors("steam:3815285055").Single().Summary.Contains("OLD CACHED BUILD"), "a mod's own ERROR line is pinned on it by its log tag");
+Check(log.ByMod["steam:3815285055"].Count(p => p.Severity == Severity.Warning) == 1, "a mod's WARN line is kept as a warning, not an error");
+Check(log.Unattributed.Count == 2 && log.Unattributed.All(p => p.Severity == Severity.Error), "a game exception and a load failure that name no mod are kept apart");
+Check(!log.ByMod.ContainsKey("nobody"), "the game's own namespace never blames a mod");
+Check(log.Report(new Dictionary<string, string> { ["nosedown"] = "Nose Down" }, DateTime.UtcNow).Contains("== Nose Down (nosedown): 1 errors"), "the saved report names each mod");
 Check(GameLog.Supports(["2026.1"], "2026.1 Patch 21") && GameLog.Supports(["2026.1 patch 18", "2026.1 Patch 21"], "2026.1 Patch 21"), "a mod for this release or this exact patch is fine");
 Check(!GameLog.Supports(["2024.1 (Full Release)"], "2026.1 Patch 21") && !GameLog.Supports(["2026.1 Patch 15"], "2026.1 Patch 21"), "a mod only for another release or patch is flagged");
 Check(GameLog.Supports([], "2026.1 Patch 21"), "a mod that names no version isn't flagged");
+Console.WriteLine("Mod settings");
+var txtSettings = SettingsFile.FromLines("NoseDownConfig.txt", "# Nose Down settings.\r\n# Edit a value.\r\n\r\n# Multiplier on every trim angle.\r\n# Allowed range 0.25 to 2.0.\r\nangleScale=1\r\n\r\n# First-person view leans.\r\nenableFPPTilt=true\r\n\r\nenabled=True\r\nname = Kaleun\r\n")!;
+Check(txtSettings.About == "Nose Down settings. Edit a value." && txtSettings.Fields.Count == 4, "a key=value file's heading and settings are read");
+Check(txtSettings.Fields[0] is { Key: "angleScale", Label: "Angle scale", Kind: FieldKind.Number, Description: "Multiplier on every trim angle. Allowed range 0.25 to 2.0." }, "the comment above a setting describes it");
+Check(txtSettings.Fields[1].Kind == FieldKind.Switch && txtSettings.Fields[1].Label == "Enable fpp tilt" && txtSettings.Fields[3] is { Key: "name", Value: "Kaleun", Kind: FieldKind.Text }, "switches and text are told apart");
+txtSettings.Fields[0].Value = "1.5";
+txtSettings.Fields[2].IsOn = false;
+var txtOriginal = "# Nose Down settings.\r\n# Edit a value.\r\n\r\n# Multiplier on every trim angle.\r\n# Allowed range 0.25 to 2.0.\r\nangleScale=1\r\n\r\n# First-person view leans.\r\nenableFPPTilt=true\r\n\r\nenabled=True\r\nname = Kaleun\r\n";
+Check(txtSettings.Render(txtOriginal) == txtOriginal.Replace("angleScale=1", "angleScale=1.5").Replace("enabled=True", "enabled=False"), "saving changes only the edited values, keeping comments, casing and line endings");
+txtSettings.Fields[0].Value = "lots";
+Check(txtSettings.Problem(txtSettings.Fields[0]) is not null, "a number setting refuses text");
+var jsonSettings = SettingsFile.FromJson("living-depths-config.json", """{ "density": "medium", "renderDistance": 120.0, "verboseLogging": false }""")!;
+Check(jsonSettings.Fields.Select(f => f.Kind).SequenceEqual([FieldKind.Text, FieldKind.Number, FieldKind.Switch]), "a JSON file's settings are read with their types");
+jsonSettings.Fields[1].Value = "200";
+jsonSettings.Fields[2].IsOn = true;
+var jsonSaved = System.Text.Json.Nodes.JsonNode.Parse(jsonSettings.Render("""{ "density": "medium", "renderDistance": 120.0, "verboseLogging": false }"""))!;
+Check(jsonSaved["renderDistance"]!.GetValue<double>() == 200 && jsonSaved["verboseLogging"]!.GetValue<bool>() && jsonSaved["density"]!.GetValue<string>() == "medium", "saving JSON keeps numbers as numbers and switches as true or false");
+
+Console.WriteLine("History, bisect and share codes");
+PackEntry Entry(string key, ulong manifest = 0) => new(key, manifest, key.ToUpperInvariant());
+var then = new List<PackEntry> { Entry("a", 1), Entry("b"), Entry("c") };
+Check(History.Compare(then, [Entry("a", 1), Entry("b"), Entry("c")]).Same, "the same setup is the same");
+var difference = History.Compare(then, [Entry("c"), Entry("a", 2), Entry("d")]);
+Check(difference is { Added: ["D"], Removed: ["B"], Versions: ["A"], Reordered: true } && difference.Describe() == "1 more on, 1 fewer on, 1 at another version, a different order", "a changed setup is described");
+var snapshots = new List<Snapshot>();
+var start = new DateTime(2026, 10, 13, 12, 0, 0, DateTimeKind.Utc);
+History.Record(snapshots, new Snapshot(start, "Switched mods", then));
+Check(!History.Record(snapshots, new Snapshot(start.AddMinutes(5), "Switched mods", then)), "an unchanged setup isn't recorded twice");
+History.Record(snapshots, new Snapshot(start.AddMinutes(1), "Switched mods", [Entry("a", 1)]));
+Check(snapshots.Count == 1 && snapshots[0].Mods.Count == 1, "quick changes for the same reason are merged into one snapshot");
+History.Record(snapshots, new Snapshot(start.AddMinutes(10), "Updated mods", [Entry("a", 2)]));
+Check(snapshots.Count == 2 && snapshots[0].Reason == "Updated mods", "the newest snapshot comes first");
+
+var setup = Enumerable.Range(1, 8).Select(i => Entry($"m{i}")).ToList();
+IEnumerable<string> Needs(string key) => key == "m2" ? ["m8"] : [];
+var bisect = Bisect.Start(setup, [.. setup.Select(m => m.Key)], Needs);
+Check(bisect.Testing.SequenceEqual(["m1", "m2", "m3", "m4", "m8"]) && bisect.RoundsLeft == 3, "the first round tests half the mods, plus anything they need");
+Check(bisect.EnabledNow().SequenceEqual(["m1", "m2", "m3", "m4", "m8"]), "only the half being tested is switched on");
+bisect = bisect.Answer(stillBroken: false, Needs);
+Check(bisect.Suspects.SequenceEqual(["m5", "m6", "m7"]), "a test that works clears the mods that were on");
+bisect = bisect.Answer(stillBroken: true, Needs);
+Check(bisect.Suspects.SequenceEqual(["m5", "m6"]), "a test that's still broken keeps the mods that were on");
+bisect = bisect.Answer(stillBroken: true, Needs);
+Check(bisect.Culprit == "m5" && bisect.Round == 4, "the search ends on a single mod");
+Check(ShareCodes.Normalise("flt-8k2qrt") == "8K2QRT" && ShareCodes.Normalise("FLT-8K2QR7") == "8K2QR7" && ShareCodes.Display("8K2QR7") == "FLT-8K2QR7", "share codes ignore case and the FLT- prefix");
+Check(ShareCodes.Normalise("flotilla://setup/8K2QR7") == "8K2QR7" && ShareCodes.Normalise("8K2-QR7") == "8K2QR7", "a link or a code with a dash works too");
+Check(ShareCodes.Normalise("OOOOOO") is null && ShareCodes.Normalise("8K2Q") is null, "look-alike letters and short codes are refused");
+Check(Community.ParseVotes("""{"mods":{"3815285055":[12,1],"bad":[1,1],"7":[0,0]}}""") is { Count: 2 } votes && votes[3815285055] is { Percent: 92, Total: 13 }, "vote counts are read");
+
+Console.WriteLine("Change notes");
+var notes = Workshop.ParseChangeNotes("""<div class="changelog headline"> Update: 3 Jul @ 4:12pm </div> <p id="1783088739">Sounds Fix , IX Crew size fixes<br>Updated Manifest &amp; Locales</p> <p id="1783080076">Revert <br></p>""");
+Check(notes.Count == 2 && notes[0].Text == "Sounds Fix , IX Crew size fixes\nUpdated Manifest & Locales" && notes[0].Time == DateTimeOffset.FromUnixTimeSeconds(1783088739).UtcDateTime, "change notes are read with their dates and line breaks");
 
 Console.WriteLine("Updates");
 Check(Updater.IsNewer("0.1.3", "0.1.2") && Updater.IsNewer("0.2", "0.1.9") && Updater.IsNewer("1.0.0", "0.9.9"), "a higher version is newer");
@@ -121,6 +193,13 @@ Check(release is { Version: "0.1.3", Notes: "- Mod authors", Size: 140067886, Do
 Check(Updater.Parse("""{"name":"V0.2.0","prerelease":true,"assets":[{"name":"Flotilla.exe","size":1}]}""") is null, "a pre-release isn't offered");
 Check(Updater.Parse("""{"name":"V0.2.0","assets":[{"name":"Other.zip","size":1}]}""") is null, "a release without Flotilla.exe isn't offered");
 Check(Updater.Parse("""{"name":"V0.2.0","assets":[{"name":"Flotilla.exe","size":1}]}""") is { Sha256: null }, "a release without a checksum still works");
+Check(Updater.CountDownloads("""[{"assets":[{"name":"Flotilla.exe","download_count":2},{"name":"notes.txt","download_count":50}]},{"assets":[{"name":"Flotilla.exe","download_count":3}]},{"assets":[]}]""") == 5, "downloads of Flotilla.exe across every release are added up");
+
+var profilePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+var scrubbed = ErrorReports.Scrub($@"IOException at {profilePath}\AppData\Local\Flotilla\order.txt");
+Check(!scrubbed.Contains(profilePath, StringComparison.OrdinalIgnoreCase) && scrubbed.Contains(@"%USERPROFILE%\AppData"), "error reports don't contain the user's folder or name");
+Check(ErrorReports.Scrub(new string('x', 100_000)).Length == 60_000, "an error report is capped in size");
+Check(Sailors.Parse("""{"sailors":42}""") == 42 && Sailors.Parse("""{"error":"Not found"}""") is null, "reads the sailor count");
 
 Console.WriteLine("Featured");
 Check(Flotilla.Featured.Parse("# notes\r\n3814892328\n  3744719470  # Living Depths\n\nnot an id\n3814892328\n").SequenceEqual([3814892328UL, 3744719470UL]), "reads IDs in order, skipping notes, blanks, junk and repeats");

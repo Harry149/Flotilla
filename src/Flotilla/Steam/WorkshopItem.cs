@@ -1,5 +1,7 @@
 namespace Flotilla.Steam;
 
+public sealed record ChangeNote(DateTime Time, string Text);
+
 public sealed record WorkshopItem(
     ulong Id,
     string Title,
