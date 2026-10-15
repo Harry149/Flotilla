@@ -43,7 +43,7 @@ public partial class MainWindow : Window
         new("IconInstalled", "Manage them in Installed",
             "Installed lists every mod on this PC, in the order UBOAT loads them.",
             [
-                "Flip the switch to turn a mod on or off. Mods you turn off stay installed. Turn all on and Turn all off do the lot.",
+                "Flip the switch to turn a mod on or off. Mods you turn off stay installed. The button above the list switches every mod on, or every mod off.",
                 "Drag the dots on the left to change the load order. When two mods change the same thing, the lower one wins.",
                 "Double-click a mod to open its page. Right-click it for its folder, its Workshop page, its settings, a rollback or uninstalling.",
             ], Page: "installed"),
@@ -105,6 +105,9 @@ public partial class MainWindow : Window
     readonly Updater updater = new(Web.Client);
     readonly Sailors sailors = new(Web.Client);
     Update? update;
+    string? handled;
+    bool preparing;
+    bool handingOver;
     GameAlert? problems;
     bool closeConfirmed;
     ModTile? open;
@@ -131,6 +134,7 @@ public partial class MainWindow : Window
         InstalledPage.OpenRequested += Open;
         InstalledPage.HistoryRequested += () => Reveal(HistoryLayer, true);
         InstalledPage.FindBrokenRequested += () => _ = FindBrokenAsync();
+        InstalledPage.BestOrderRequested += () => _ = ShowBestOrderAsync();
         InstalledPage.ShareRequested += () => _ = ShareAsync(library.CurrentSetup(), "your setup");
         InstalledPage.UseCodeRequested += () => _ = UseCodeAsync(null);
         InstalledPage.SettingsRequested += OpenEditor;
@@ -140,6 +144,7 @@ public partial class MainWindow : Window
         SettingsPage.TourRequested += () => ShowTour(0);
         SettingsPage.UpdateCheckRequested += () => _ = CheckForUpdateAsync(manual: true);
         SettingsPage.RestartRequested += OfferRestart;
+        SettingsPage.ThemeChanged += () => _ = RestartAsync();
         SettingsPage.CountMeChanged += () => _ = RecountAsync();
         library.PropertyChanged += OnLibraryChanged;
         library.ProblemsFound += alert =>
@@ -150,8 +155,11 @@ public partial class MainWindow : Window
 
         Loaded += async (_, _) =>
         {
+            var args = Environment.GetCommandLineArgs();
+            if (args.FirstOrDefault(a => a.StartsWith("--tab=")) is { } tab) TabFor(tab[6..]).IsChecked = true;
+            if (args.Contains(Updater.Updated)) library.Status.Say($"Updated to {Updater.Current}.");
             if (!settings.TutorialSeen) ShowTour(0);
-            _ = CheckForUpdateAsync();
+            _ = WatchForUpdatesAsync();
             _ = ShowDownloadsAsync();
             await library.StartAsync();
             if (library.IsBisecting)
@@ -175,7 +183,7 @@ public partial class MainWindow : Window
     {
         e.Handled = DialogLayer.IsVisible ? DialogKey(e.Key)
             : TutorialLayer.IsVisible ? TourKey(e.Key)
-            : (HistoryLayer.IsVisible || EditorLayer.IsVisible) && e.Key == Key.Escape ? CloseLayers()
+            : (HistoryLayer.IsVisible || EditorLayer.IsVisible || OrderLayer.IsVisible) && e.Key == Key.Escape ? CloseLayers()
             : ShortcutKey(e.Key == Key.System ? e.SystemKey : e.Key);
         base.OnPreviewKeyDown(e);
     }
@@ -328,12 +336,26 @@ public partial class MainWindow : Window
     async void OfferRestart()
     {
         var answer = await Ask("Restart Flotilla?", "Flotilla uses the new data folder after it restarts.", "Restart now", cancel: "Later");
-        if (answer is null || Environment.ProcessPath is not { } path) return;
+        if (answer is null) return;
+        await RestartAsync();
+    }
 
-        closeConfirmed = true;
+    async Task RestartAsync()
+    {
+        if (Environment.ProcessPath is not { } path) return;
+
         SavePlacement();
-        Shell.Open(path);
-        Application.Current.Shutdown();
+        closeConfirmed = true;
+        handingOver = true;
+        try
+        {
+            await HandOverAsync(System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path, $"{Links.Handover} --tab={CurrentTab}") { UseShellExecute = true }));
+        }
+        catch (Win32Exception e)
+        {
+            closeConfirmed = handingOver = false;
+            library.Status.Warn($"Couldn't restart Flotilla: {e.Message}");
+        }
     }
 
     static void Reveal(UIElement view, bool visible)
@@ -358,14 +380,14 @@ public partial class MainWindow : Window
 
         TutorialIcon.Data = (Geometry)FindResource(page.Icon);
         TutorialStep.Text = $"Step {tourStep + 1} of {Tour.Length}";
-        TutorialTitle.Text = page.Title;
+        TutorialTitle.Text = Themes.Heading(page.Title);
         TutorialBody.Text = page.Body;
         TutorialTips.ItemsSource = page.Tips;
         TutorialDots.ItemsSource = Enumerable.Range(0, Tour.Length).Select(i => i == tourStep).ToList();
         TutorialBack.Visibility = tourStep > 0 ? Visibility.Visible : Visibility.Collapsed;
         TutorialNext.Content = tourStep == Tour.Length - 1 ? "Let's go" : "Next";
 
-        (page.Page switch { "installed" => InstalledTab, "settings" => SettingsTab, _ => BrowseTab }).IsChecked = true;
+        TabFor(page.Page).IsChecked = true;
         CloseMod();
 
         if (!TutorialLayer.IsVisible) Reveal(TutorialLayer, true);
@@ -413,7 +435,7 @@ public partial class MainWindow : Window
         dialog = new TaskCompletionSource<string?>();
         validate = check;
 
-        DialogTitle.Text = title;
+        DialogTitle.Text = Themes.Heading(title);
         DialogText.Text = text;
         DialogHint.Text = "";
         DialogConfirm.Content = confirm;
@@ -450,6 +472,7 @@ public partial class MainWindow : Window
     {
         HistoryLayer.Visibility = Visibility.Collapsed;
         EditorLayer.Visibility = Visibility.Collapsed;
+        OrderLayer.Visibility = Visibility.Collapsed;
         return true;
     }
 
@@ -479,7 +502,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        EditorTitle.Text = $"{mod.Name} settings";
+        EditorTitle.Text = Themes.Heading($"{mod.Name} settings");
         EditorFiles.ItemsSource = editing.Count > 1 ? editing : null;
         EditorFiles.Visibility = editing.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
         ShowEditorFile(editing[0]);
@@ -537,6 +560,31 @@ public partial class MainWindow : Window
         }
         CloseLayers();
         library.Status.Say(saved == 0 ? "Nothing changed." : "Saved. Some mods only pick up changes the next time UBOAT starts.");
+    }
+
+    OrderPlan? plan;
+
+    async Task ShowBestOrderAsync()
+    {
+        if (await library.BestOrderAsync() is not { } found) return;
+        if (found.Moves == 0)
+        {
+            library.Status.Say("Your load order already looks right. Nothing needs to move.");
+            return;
+        }
+
+        plan = found;
+        OrderSummary.Text = (found.Moves == 1 ? "1 mod moves." : $"{found.Moves} mods move.")
+            + " Only mods that are switched on are sorted. Nothing changes until you press Use this order, and your current order stays in History.";
+        OrderRows.ItemsSource = found.Rows;
+        Reveal(OrderLayer, true);
+    }
+
+    void OnUseOrder(object sender, RoutedEventArgs e)
+    {
+        CloseLayers();
+        if (plan is { } chosen) library.UseOrder(chosen);
+        plan = null;
     }
 
     async Task FindBrokenAsync()
@@ -664,6 +712,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (handingOver) return;
         SavePlacement();
         SayGoodbye();
     }
@@ -744,6 +793,7 @@ public partial class MainWindow : Window
     {
         if (count is not > 0) return;
 
+        DownloadsIcon.Data = (Geometry)FindResource("IconUsers");
         DownloadsText.Text = count == 1 ? "Flotilla is assisting 1 sailor" : $"Flotilla is assisting {count:N0} sailors";
         Downloads.ToolTip = "People with Flotilla open right now. You can stop being counted in Settings.";
         Downloads.Visibility = Visibility.Visible;
@@ -759,17 +809,24 @@ public partial class MainWindow : Window
         catch (AggregateException) { }
     }
 
+    async Task WatchForUpdatesAsync()
+    {
+        Updater.CleanUp();
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        do
+        {
+            if (settings.CheckForUpdates) await CheckForUpdateAsync();
+        } while (await timer.WaitForNextTickAsync());
+    }
+
     async Task CheckForUpdateAsync(bool manual = false)
     {
-        if (!manual)
-        {
-            Updater.CleanUp();
-            if (!library.Settings.CheckForUpdates) return;
-        }
+        if (preparing) return;
 
+        Update? found;
         try
         {
-            update = await updater.CheckAsync();
+            found = await updater.CheckAsync();
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
         {
@@ -777,17 +834,48 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (manual && update is null) library.Status.Say($"You have the latest Flotilla, {Updater.Current}.");
+        if (found is null)
+        {
+            Updater.CleanUp(download: true);
+            if (manual) library.Status.Say($"You have the latest Flotilla, {Updater.Current}.");
+            return;
+        }
+        if (!manual && found.Version == handled) return;
+
+        if (update?.Version != found.Version && Updater.CanReplaceItself)
+        {
+            preparing = true;
+            try
+            {
+                await updater.DownloadAsync(found, new Progress<double>(p =>
+                {
+                    if (manual) library.Status.Work("Updating Flotilla", $"Downloading {found.Version}, {p * 100:0}%", p);
+                }));
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
+            {
+                if (manual) library.Status.Warn($"Couldn't download Flotilla {found.Version}: {e.Message}");
+            }
+            finally
+            {
+                preparing = false;
+                if (manual) library.Status.Idle();
+            }
+        }
+
+        update = found;
+        if (manual && Library.GameIsRunning()) library.Status.Say($"Flotilla {found.Version} is ready. It offers the update once UBOAT closes.");
         OfferUpdate();
     }
 
     async void OfferUpdate()
     {
-        if (update is not { } offer || TutorialLayer.IsVisible || DialogLayer.IsVisible) return;
+        if (update is not { } offer || TutorialLayer.IsVisible || DialogLayer.IsVisible || Library.GameIsRunning()) return;
         update = null;
+        handled = offer.Version;
 
         var notes = offer.Notes.Length > 420 ? offer.Notes[..420].TrimEnd() + "…" : offer.Notes;
-        var text = $"You have {Updater.Current}. {(Updater.CanReplaceItself ? "Flotilla downloads it, then restarts." : "This copy can't update itself, so the download page opens.")}";
+        var text = $"You have {Updater.Current}. {(Updater.CanReplaceItself ? "Updating takes a moment, and Flotilla reopens where you left it." : "This copy can't update itself, so the download page opens.")}";
         if (notes.Length > 0) text += $"\n\nWhat's new:\n{notes}";
 
         var answer = await Ask($"Flotilla {offer.Version} is out", text, "Update now", cancel: "Not now");
@@ -801,21 +889,49 @@ public partial class MainWindow : Window
 
         try
         {
-            library.Status.Work("Updating Flotilla", $"Downloading {offer.Version}");
+            if (library.Busy)
+            {
+                library.Status.Say("Flotilla updates as soon as your mods finish installing.");
+                while (library.Busy) await Task.Delay(500);
+            }
+
             var downloaded = await updater.DownloadAsync(offer, new Progress<double>(p =>
                 library.Status.Work("Updating Flotilla", $"Downloading {offer.Version}, {p * 100:0}%", p)));
-            closeConfirmed = true;
             SavePlacement();
-            Updater.Install(downloaded);
-            Application.Current.Shutdown();
+            closeConfirmed = true;
+            handingOver = true;
+            await HandOverAsync(Updater.Install(downloaded, $"{Links.Handover} {Updater.Updated} --tab={CurrentTab}"));
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or Win32Exception)
         {
+            closeConfirmed = handingOver = false;
             library.Status.Idle();
             library.Status.Warn($"Couldn't update Flotilla: {e.Message} You can download it from the releases page instead.");
             Shell.Open(offer.Page);
         }
     }
+
+    static async Task HandOverAsync(System.Diagnostics.Process? next)
+    {
+        using (next)
+        {
+            for (var i = 0; next is not null && i < 100 && !next.HasExited; i++)
+            {
+                next.Refresh();
+                if (next.MainWindowHandle != IntPtr.Zero)
+                {
+                    await Task.Delay(500);
+                    break;
+                }
+                await Task.Delay(200);
+            }
+        }
+        Application.Current.Shutdown();
+    }
+
+    string CurrentTab => InstalledTab.IsChecked == true ? "installed" : SettingsTab.IsChecked == true ? "settings" : CreditsTab.IsChecked == true ? "credits" : "browse";
+
+    RadioButton TabFor(string name) => name switch { "installed" => InstalledTab, "settings" => SettingsTab, "credits" => CreditsTab, _ => BrowseTab };
 
     bool DialogKey(Key key)
     {

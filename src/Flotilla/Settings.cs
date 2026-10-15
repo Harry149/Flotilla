@@ -25,6 +25,9 @@ public sealed class Settings
     public string? DataFolder { get; set; }
     public string? GameVersion { get; set; }
     public DateTime LogChecked { get; set; }
+    public DateTime SteamOrderSaved { get; set; }
+    public bool HideSwitchedOff { get; set; }
+    public string Theme { get; set; } = "Sonar";
     public List<ulong> Favourites { get; set; } = [];
     public Dictionary<string, bool> Votes { get; set; } = [];
 
@@ -44,7 +47,9 @@ public sealed class Settings
     {
         try
         {
-            File.WriteAllText(Location, JsonSerializer.Serialize(this));
+            var temporary = Location + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(this));
+            File.Move(temporary, Location, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }

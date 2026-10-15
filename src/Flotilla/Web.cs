@@ -9,7 +9,7 @@ public static class Web
     static HttpClient Create()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Flotilla/0.1");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Flotilla/{Updater.Current}");
         return client;
     }
 }

@@ -8,15 +8,15 @@
         <DataTemplate DataType="{x:Type views:HeroRow}">
             <Grid x:Name="Hero" Margin="28,0,20,4" Height="268" Background="Transparent" MouseEnter="OnHeroEnter" MouseLeave="OnHeroLeave">
                 <Grid DataContext="{Binding Tile}" SizeChanged="OnHeroSized">
-                    <Border CornerRadius="10" Background="{StaticResource Surface}"/>
-                    <Border CornerRadius="10" RenderOptions.BitmapScalingMode="HighQuality">
+                    <Border CornerRadius="{StaticResource RoundLarge}" Background="{StaticResource Surface}"/>
+                    <Border CornerRadius="{StaticResource RoundLarge}" RenderOptions.BitmapScalingMode="HighQuality">
                         <Border.Background>
                             <ImageBrush ImageSource="{Binding Blur}" Stretch="UniformToFill"/>
                         </Border.Background>
                     </Border>
-                    <Border CornerRadius="10" Background="{StaticResource HeroShade}"/>
+                    <Border CornerRadius="{StaticResource RoundLarge}" Background="{StaticResource HeroShade}"/>
                     <ui:Sonar Width="620" Height="620" Margin="0,-176,-140,-176" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                    <Border CornerRadius="10" BorderBrush="{StaticResource CardLine}" BorderThickness="1"/>
+                    <Border CornerRadius="{StaticResource RoundLarge}" BorderBrush="{StaticResource CardLine}" BorderThickness="1"/>
 
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -26,7 +26,7 @@
 
                         <StackPanel Margin="32,0,28,0" VerticalAlignment="Center">
                             <TextBlock Text="{Binding DataContext.Label, ElementName=Hero}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource AccentText}"/>
-                            <TextBlock Text="{Binding Title}" Margin="0,6,0,0" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding Title}" Margin="0,6,0,0" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold"
                                        FontSize="44" LineHeight="48" LineStackingStrategy="BlockLineHeight" TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{Binding Summary}" Margin="0,8,0,0" MaxWidth="520" MaxHeight="44" HorizontalAlignment="Left"
                                        FontSize="15" LineHeight="22" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap" TextTrimming="WordEllipsis"
@@ -41,23 +41,23 @@
                         </StackPanel>
 
                         <Grid Grid.Column="1" Width="284" Height="212" Margin="0,0,28,0">
-                            <Border CornerRadius="6" Background="{StaticResource Raised}">
+                            <Border CornerRadius="{StaticResource Round}" Background="{StaticResource Raised}">
                                 <Border.Effect>
                                     <DropShadowEffect BlurRadius="40" ShadowDepth="14" Direction="270" Opacity="0.6" Color="Black"/>
                                 </Border.Effect>
                             </Border>
-                            <Border CornerRadius="6" RenderOptions.BitmapScalingMode="HighQuality">
+                            <Border CornerRadius="{StaticResource Round}" RenderOptions.BitmapScalingMode="HighQuality">
                                 <Border.Background>
                                     <ImageBrush ImageSource="{Binding Blur}" Stretch="UniformToFill"/>
                                 </Border.Background>
                             </Border>
-                            <Border CornerRadius="6" Background="#4D000000"/>
-                            <Border CornerRadius="6">
+                            <Border CornerRadius="{StaticResource Round}" Background="#4D000000"/>
+                            <Border CornerRadius="{StaticResource Round}">
                                 <Border.Background>
                                     <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="Uniform"/>
                                 </Border.Background>
                             </Border>
-                            <Border CornerRadius="6" BorderBrush="{StaticResource AccentRing}" BorderThickness="1"/>
+                            <Border CornerRadius="{StaticResource Round}" BorderBrush="{StaticResource AccentRing}" BorderThickness="1"/>
                         </Grid>
                     </Grid>
                 </Grid>
@@ -74,7 +74,7 @@
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border Background="Transparent" Padding="6">
-                                            <Border x:Name="Dot" Width="8" Height="8" CornerRadius="4" Background="{StaticResource Muted}" Opacity="0.5"/>
+                                            <Border x:Name="Dot" Width="8" Height="8" CornerRadius="{StaticResource RoundSmall}" Background="{StaticResource Muted}" Opacity="0.5"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
@@ -103,7 +103,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Title}" MaxWidth="420" VerticalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed"
+                    <TextBlock Text="{Binding Title, Converter={StaticResource Upper}}" MaxWidth="420" VerticalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}"
                                FontWeight="SemiBold" FontSize="22" TextTrimming="CharacterEllipsis"/>
                     <Button Style="{StaticResource Quiet}" Margin="14,2,0,0" Click="OnClearAuthor" ToolTip="Back to every mod (Esc)"
                             Visibility="{Binding Clearable, Converter={StaticResource Visible}}">
@@ -146,7 +146,7 @@
         <DataTemplate DataType="{x:Type views:MessageRow}">
             <StackPanel Margin="28,48,20,40" HorizontalAlignment="Center">
                 <ui:Sonar Width="200" Height="200" Margin="0,0,0,28" Visibility="{Binding Scanning, Converter={StaticResource Visible}}"/>
-                <TextBlock Text="{Binding Title}" HorizontalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="22"/>
+                <TextBlock Text="{Binding Title, Converter={StaticResource Upper}}" HorizontalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="22"/>
                 <TextBlock Text="{Binding Text}" HorizontalAlignment="Center" Margin="0,8,0,0" MaxWidth="440" TextAlignment="Center"
                            TextWrapping="Wrap" LineHeight="21" Foreground="{StaticResource Muted}"/>
                 <Button Style="{StaticResource Primary}" Content="Try again" Margin="0,20,0,0" HorizontalAlignment="Center" Click="OnRetry"
@@ -162,7 +162,7 @@
                   SizeChanged="OnResized">
         <ItemsControl.Template>
             <ControlTemplate TargetType="ItemsControl">
-                <ScrollViewer CanContentScroll="True" Focusable="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer CanContentScroll="True" Focusable="False" ui:ScrollFade.Enabled="True" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                     <ItemsPresenter/>
                 </ScrollViewer>
             </ControlTemplate>

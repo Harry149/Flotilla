@@ -11,6 +11,8 @@ public sealed class Installer(SteamCmd steam, string mods, StatusLine status)
     readonly List<ModTile> queue = [];
     bool running;
 
+    public bool Busy => running;
+
     public event Action<ModTile>? Installed;
     public event Action? Finished;
 

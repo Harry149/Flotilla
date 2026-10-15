@@ -177,8 +177,11 @@ public partial class WorkshopView : UserControl
         if (hero is not null && ((FrameworkElement)sender).DataContext is HeroDot dot) hero.Show(dot.Index);
     }
 
-    void OnHeroSized(object sender, SizeChangedEventArgs e) =>
-        ((FrameworkElement)sender).Clip = new RectangleGeometry(new Rect(e.NewSize), 10, 10);
+    void OnHeroSized(object sender, SizeChangedEventArgs e)
+    {
+        var radius = ((CornerRadius)FindResource("RoundLarge")).TopLeft;
+        ((FrameworkElement)sender).Clip = new RectangleGeometry(new Rect(e.NewSize), radius, radius);
+    }
 
     static void Raise(Action<ModTile>? handler, object sender)
     {

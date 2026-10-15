@@ -12,9 +12,13 @@ public sealed record Update(string Version, string Notes, string Page, string Do
 
 public sealed class Updater(HttpClient http)
 {
+    string? etag;
+    string? latest;
+
     const string LatestRelease = "https://api.github.com/repos/Harry149/Flotilla/releases/latest";
     const string Releases = "https://api.github.com/repos/Harry149/Flotilla/releases?per_page=100";
     const string AssetName = "Flotilla.exe";
+    public const string Updated = "--updated";
 
     static readonly Regex Number = new(@"(\d+)\.(\d+)(?:\.(\d+))?([a-z])?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -27,16 +31,24 @@ public sealed class Updater(HttpClient http)
         }
     }
 
-    public static bool CanReplaceItself => Environment.ProcessPath is not null && string.IsNullOrEmpty(typeof(Updater).Assembly.Location);
+    public static bool CanReplaceItself => Environment.ProcessPath is { } exe && typeof(Updater).Assembly.Location is var code
+        && (code.Length == 0 || !string.Equals(Path.GetDirectoryName(code), Path.GetDirectoryName(exe), StringComparison.OrdinalIgnoreCase));
 
     public async Task<Update?> CheckAsync()
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, LatestRelease);
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
+        if (etag is not null) request.Headers.TryAddWithoutValidation("If-None-Match", etag);
         using var response = await http.SendAsync(request);
-        if (!response.IsSuccessStatusCode) return null;
+        if (response.StatusCode != System.Net.HttpStatusCode.NotModified)
+        {
+            response.EnsureSuccessStatusCode();
+            latest = await response.Content.ReadAsStringAsync();
+            etag = response.Headers.ETag?.ToString();
+        }
+        if (latest is null) return null;
 
-        var update = Parse(await response.Content.ReadAsStringAsync());
+        var update = Parse(latest);
         if (update is null || !IsNewer(update.Version, Current)) return null;
         return update.Sha256 is { } hash && await IsRunningAsync(hash) ? null : update;
     }
@@ -123,9 +135,13 @@ public sealed class Updater(HttpClient http)
         return [Part(1), Part(2), Part(3), letter];
     }
 
+    public static string Pending => Environment.ProcessPath! + ".new";
+
     public async Task<string> DownloadAsync(Update update, IProgress<double> progress, CancellationToken cancel = default)
     {
-        var target = Environment.ProcessPath! + ".new";
+        var target = Pending;
+        if (await IsDownloadedAsync(target, update, cancel)) return target;
+
         using var response = await http.GetAsync(update.Download, HttpCompletionOption.ResponseHeadersRead, cancel);
         response.EnsureSuccessStatusCode();
 
@@ -154,13 +170,20 @@ public sealed class Updater(HttpClient http)
         return target;
     }
 
+    static async Task<bool> IsDownloadedAsync(string path, Update update, CancellationToken cancel)
+    {
+        if (update.Sha256 is not { } expected || !File.Exists(path) || (update.Size > 0 && new FileInfo(path).Length != update.Size)) return false;
+        await using var file = File.OpenRead(path);
+        return Convert.ToHexString(await SHA256.HashDataAsync(file, cancel)).Equals(expected, StringComparison.OrdinalIgnoreCase);
+    }
+
     static IOException Damaged(string path, string reason)
     {
         File.Delete(path);
         return new IOException($"The download was damaged ({reason}). Try again later.");
     }
 
-    public static void Install(string downloaded)
+    public static Process? Install(string downloaded, string arguments = "")
     {
         var current = Environment.ProcessPath!;
         var old = current + ".old";
@@ -175,19 +198,17 @@ public sealed class Updater(HttpClient http)
             File.Move(old, current);
             throw;
         }
-        Process.Start(new ProcessStartInfo(current) { UseShellExecute = true })?.Dispose();
+        return Process.Start(new ProcessStartInfo(current, arguments) { UseShellExecute = true });
     }
 
-    public static void CleanUp()
+    public static void CleanUp(bool download = false)
     {
         if (Environment.ProcessPath is not { } path) return;
-        foreach (var leftover in new[] { path + ".old", path + ".new" })
+        try
         {
-            try
-            {
-                if (File.Exists(leftover)) File.Delete(leftover);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            var leftover = path + (download ? ".new" : ".old");
+            if (File.Exists(leftover)) File.Delete(leftover);
         }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 }

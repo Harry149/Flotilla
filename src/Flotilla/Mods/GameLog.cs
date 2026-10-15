@@ -152,6 +152,13 @@ public sealed record GameLog(string? GameVersion, IReadOnlyDictionary<string, Li
         return text.ToString();
     }
 
+    static readonly Regex TitleVersion = new(@"^\s*\[\s*v?(\d{4}\.\d+)[^\]]*\]\s*", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    public static (string Title, string? Version) SplitTitle(string title) =>
+        TitleVersion.Match(title) is { Success: true } match && match.Length < title.Length
+            ? (title[match.Length..], match.Groups[1].Value)
+            : (title, null);
+
     public static bool Supports(IEnumerable<string> supported, string game)
     {
         var listed = supported.Select(Normalise).Where(v => v.Length > 0).ToList();

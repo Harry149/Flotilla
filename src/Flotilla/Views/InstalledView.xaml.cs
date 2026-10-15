@@ -30,13 +30,22 @@ public partial class InstalledView : UserControl
     {
         InitializeComponent();
         edgeScroll.Tick += (_, _) => EdgeScroll();
+        Order.Loaded += (_, _) =>
+        {
+            if (Visuals.Find<ScrollViewer>(Order) is { } viewer) ScrollFade.SetEnabled(viewer, true);
+        };
         DataContextChanged += (_, e) =>
         {
             if (e.NewValue is Library library)
+            {
+                HideOff.IsChecked = library.Settings.HideSwitchedOff;
                 library.PropertyChanged += (_, change) =>
                 {
                     if (change.PropertyName is nameof(Library.BisectTitle)) ShowBisectButtons();
+                    if (change.PropertyName is nameof(Library.InstalledSummary)) ApplyFilter();
                 };
+                ApplyFilter();
+            }
         };
     }
 
@@ -44,6 +53,7 @@ public partial class InstalledView : UserControl
     public event Action<ModTile>? OpenRequested;
     public event Action? HistoryRequested;
     public event Action? FindBrokenRequested;
+    public event Action? BestOrderRequested;
     public event Action? ShareRequested;
     public event Action? UseCodeRequested;
     public event Action<InstalledMod>? SettingsRequested;
@@ -96,16 +106,43 @@ public partial class InstalledView : UserControl
 
     Library Library => (Library)DataContext;
 
-    bool Filtering => Order.Items.Filter is not null;
+    string query = "";
+
+    bool Filtering => query.Length > 0;
+
+    bool Hiding => HideOff.IsChecked == true;
 
     public void Filter(string text)
     {
-        text = text.Trim();
-        Order.Items.Filter = text.Length == 0 ? null
-            : item => item is InstalledMod mod && (mod.Name.Contains(text, StringComparison.CurrentCultureIgnoreCase) || mod.Key.Contains(text, StringComparison.OrdinalIgnoreCase));
+        query = text.Trim();
+        ApplyFilter();
+    }
 
-        var none = text.Length > 0 && Order.Items.Count == 0;
-        NoMatchTitle.Text = $"No installed mod matches “{text}”";
+    void OnHideOff(object sender, RoutedEventArgs e)
+    {
+        Library.Settings.HideSwitchedOff = Hiding;
+        Library.Settings.Save();
+        ApplyFilter();
+    }
+
+    void ApplyFilter()
+    {
+        if (drag is not null) return;
+
+        var text = query;
+        var hiding = Hiding;
+        Order.Items.Filter = text.Length == 0 && !hiding ? null
+            : item => item is InstalledMod mod && (!hiding || mod.Enabled)
+                && (text.Length == 0 || mod.Name.Contains(text, StringComparison.CurrentCultureIgnoreCase) || mod.Key.Contains(text, StringComparison.OrdinalIgnoreCase));
+
+        var hidden = hiding ? Library.Installed.Count(m => !m.Enabled) : 0;
+        Hint.Text = hidden > 0
+            ? hidden == 1 ? "1 switched-off mod hidden." : $"{hidden} switched-off mods hidden."
+            : Library.Installed.Count > 1 ? "Loads top to bottom. The lower mod wins when two change the same thing." : "";
+
+        var none = Order.Items.Count == 0 && Library.Installed.Count > 0;
+        NoMatchTitle.Text = Themes.Heading(text.Length > 0 ? $"No installed mod matches “{text}”" : "Every mod is switched off");
+        NoMatchText.Text = text.Length > 0 ? "Try part of the name, or clear the search with Esc." : "Switch some on, or turn off Hide switched-off mods to see them.";
         NoMatch.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -122,9 +159,9 @@ public partial class InstalledView : UserControl
         else Library.Status.Say("There's no game log yet. UBOAT writes one when it runs.");
     }
 
-    void OnAllOn(object sender, RoutedEventArgs e) => Library.SetAll(true);
+    void OnToggleAll(object sender, RoutedEventArgs e) => Library.ToggleAll();
 
-    void OnAllOff(object sender, RoutedEventArgs e) => Library.SetAll(false);
+    void OnBestOrder(object sender, RoutedEventArgs e) => BestOrderRequested?.Invoke();
 
     static InstalledMod? ModOf(object sender) => ((FrameworkElement)sender).DataContext as InstalledMod;
 
@@ -205,18 +242,18 @@ public partial class InstalledView : UserControl
     {
         if (e.Key != Key.System || Filtering || Order.SelectedItem is not InstalledMod mod) return;
 
-        var index = Library.Installed.IndexOf(mod);
+        var index = Order.Items.IndexOf(mod);
         var target = e.SystemKey switch
         {
             Key.Up => index - 1,
             Key.Down => index + 1,
             Key.Home => 0,
-            Key.End => Library.Installed.Count - 1,
+            Key.End => Order.Items.Count - 1,
             _ => -1,
         };
-        if (target < 0 || target >= Library.Installed.Count) return;
+        if (target < 0 || target >= Order.Items.Count) return;
 
-        Library.Move(mod, target);
+        Library.Move(mod, Library.Installed.IndexOf((InstalledMod)Order.Items[target]));
         Order.SelectedItem = mod;
         (Order.ItemContainerGenerator.ContainerFromItem(mod) as ListBoxItem)?.Focus();
         e.Handled = true;
@@ -278,7 +315,7 @@ public partial class InstalledView : UserControl
     void Lift(InstalledMod mod)
     {
         scroller ??= Visuals.Find<ScrollViewer>(Order);
-        var from = Library.Installed.IndexOf(mod);
+        var from = Order.Items.IndexOf(mod);
         if (from < 0 || Order.ItemContainerGenerator.ContainerFromItem(mod) is not ListBoxItem item) return;
 
         drag = new Drag(mod, item, from, item.ActualHeight + item.Margin.Top + item.Margin.Bottom, PointerY());
@@ -292,7 +329,7 @@ public partial class InstalledView : UserControl
     {
         if (drag is not { } d) return;
 
-        var last = Library.Installed.Count - 1;
+        var last = Order.Items.Count - 1;
         var offset = Math.Clamp(PointerY() - d.StartY, -d.From * d.Step, (last - d.From) * d.Step);
         ((TranslateTransform)d.Item.RenderTransform).Y = offset;
 
@@ -345,8 +382,9 @@ public partial class InstalledView : UserControl
             row.Effect = null;
             Panel.SetZIndex(row, 0);
         }
+        var target = d.Target != d.From ? Library.Installed.IndexOf((InstalledMod)Order.Items[d.Target]) : -1;
         drag = null;
 
-        if (d.Target != d.From) Library.Move(d.Mod, d.Target);
+        if (target >= 0) Library.Move(d.Mod, target);
     }
 }

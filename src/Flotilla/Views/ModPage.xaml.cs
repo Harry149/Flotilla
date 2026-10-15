@@ -37,7 +37,7 @@ public partial class ModPage : UserControl
 
     public void ShowGameVersion(string? version)
     {
-        VoteQuestion.Text = version is null ? "Does it work on your UBOAT?" : $"Does it work on UBOAT {version}?";
+        VoteQuestion.Text = Themes.Heading(version is null ? "Does it work on your UBOAT?" : $"Does it work on UBOAT {version}?");
         VoteCard.Visibility = Sailors.Enabled ? Visibility.Visible : Visibility.Collapsed;
     }
 

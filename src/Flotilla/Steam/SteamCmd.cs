@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using Flotilla.Mods;
 
 namespace Flotilla.Steam;
 
@@ -100,8 +101,7 @@ public sealed class SteamCmd(string root)
             if (reason is not null) return reason;
             if (!Directory.Exists(Depot)) return "SteamCMD finished without saving any files";
 
-            if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
-            Directory.Move(Depot, target);
+            Folders.Replace(target, Depot);
             Pin(id, manifest);
             return null;
         }
@@ -316,7 +316,12 @@ public sealed class SteamCmd(string root)
     {
         Directory.CreateDirectory(mods);
         var content = new DirectoryInfo(Content);
-        if (content.Exists && content.LinkTarget is not null) return;
+        if (content.Exists && content.LinkTarget is { } linked)
+        {
+            if (SamePath(linked, mods)) return;
+            content.Delete();
+            content.Refresh();
+        }
 
         if (content.Exists)
         {
@@ -337,6 +342,9 @@ public sealed class SteamCmd(string root)
         if (!Directory.Exists(content.FullName))
             throw new IOException($"Couldn't connect SteamCMD's download folder to {mods}.");
     }
+
+    static bool SamePath(string a, string b) =>
+        string.Equals(Path.GetFullPath(a.Replace(@"\??\", "").Replace(@"\\?\", "")).TrimEnd('\\'), Path.GetFullPath(b).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
 
     static long FolderSize(string path)
     {

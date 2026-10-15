@@ -58,6 +58,8 @@ public sealed class Library : Observable
     public string? WorkshopError { get; private set => Set(ref field, value); }
     public string InstalledSummary { get; private set => Set(ref field, value); } = "";
     public int UpdateCount { get; private set => Set(ref field, value); }
+    public string ToggleAllLabel { get; private set => Set(ref field, value); } = "Turn all on";
+    bool allOn;
     public bool Importing
     {
         get;
@@ -67,6 +69,7 @@ public sealed class Library : Observable
         }
     }
     public bool CanImport => !Importing;
+    public bool Busy => installer.Busy || Importing;
 
     public async Task StartAsync()
     {
@@ -157,6 +160,7 @@ public sealed class Library : Observable
             Settings.GameVersion = version;
             Settings.Save();
             Raise(nameof(GameVersion));
+            foreach (var tile in Tiles) tile.ShowGame(version);
             UpdateIssues();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
@@ -326,6 +330,7 @@ public sealed class Library : Observable
             if ((await workshop.DetailsAsync([id])).FirstOrDefault() is not { } item) return null;
             var tile = new ModTile(item);
             tile.LoadFavourite(Settings.Favourites.Contains(id));
+            tile.ShowGame(Settings.GameVersion);
             tiles[id] = tile;
             return tile;
         }
@@ -362,8 +367,10 @@ public sealed class Library : Observable
 
     public int FavouriteCount => Settings.Favourites.Count;
 
+    static readonly EnumerationOptions Everything = new() { RecurseSubdirectories = true, IgnoreInaccessible = true };
+
     public long CacheSize() => Paths.Caches.Select(c => Path.Combine(Paths.Game, c)).Where(Directory.Exists)
-        .Sum(dir => new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length));
+        .Sum(dir => new DirectoryInfo(dir).EnumerateFiles("*", Everything).Sum(f => f.Length));
 
     public bool ClearCache(bool quiet = false)
     {
@@ -377,7 +384,7 @@ public sealed class Library : Observable
         var locked = 0;
         foreach (var dir in Paths.Caches.Select(c => Path.Combine(Paths.Game, c)).Where(Directory.Exists))
         {
-            foreach (var file in new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories).ToList())
+            foreach (var file in new DirectoryInfo(dir).EnumerateFiles("*", Everything).ToList())
             {
                 try
                 {
@@ -493,7 +500,7 @@ public sealed class Library : Observable
 
                 var size = new DirectoryInfo(folder).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
                 var copy = size <= BiggestBackup;
-                if (copy) CopyFolder(folder, Path.Combine(target, "files"));
+                if (copy) Folders.Copy(folder, Path.Combine(target, "files"));
                 File.WriteAllText(Path.Combine(target, "backup.json"), JsonSerializer.Serialize(new BackupInfo(manifest, tile.Title, DateTime.UtcNow, copy)));
             });
         }
@@ -502,13 +509,6 @@ public sealed class Library : Observable
         {
             Status.Idle();
         }
-    }
-
-    static void CopyFolder(string from, string to)
-    {
-        Directory.CreateDirectory(to);
-        foreach (var file in Directory.EnumerateFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
-        foreach (var folder in Directory.EnumerateDirectories(from)) CopyFolder(folder, Path.Combine(to, Path.GetFileName(folder)));
     }
 
     public string? RollbackNote(InstalledMod mod) =>
@@ -531,14 +531,7 @@ public sealed class Library : Observable
         {
             if (backup.HasFiles && Directory.Exists(files))
             {
-                await Task.Run(() =>
-                {
-                    var newer = folder + ".newer";
-                    if (Directory.Exists(newer)) Directory.Delete(newer, recursive: true);
-                    if (Directory.Exists(folder)) Directory.Move(folder, newer);
-                    Directory.Move(files, folder);
-                    if (Directory.Exists(newer)) Directory.Delete(newer, recursive: true);
-                });
+                await Task.Run(() => Folders.Replace(folder, files));
                 steam.Pin(id, backup.Manifest);
             }
             else
@@ -727,7 +720,9 @@ public sealed class Library : Observable
         }
         try
         {
-            return await community.ShareAsync(Settings.InstallId, ModPack.Write(setup));
+            if (await community.ShareAsync(Settings.InstallId, ModPack.Write(setup)) is { } code) return code;
+            Status.Warn("Couldn't make a share code right now. Try again in a few minutes.");
+            return null;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
         {
@@ -832,6 +827,7 @@ public sealed class Library : Observable
             Reload();
             return false;
         }
+        SaveSteamOrder();
         Renumber();
         Remember(reason);
         return true;
@@ -1199,7 +1195,28 @@ public sealed class Library : Observable
         _ => $"{string.Join(", ", names[..^1])} and {names[^1]}",
     };
 
-    public void PlayGame()
+    void SaveSteamOrder()
+    {
+        var steamMods = Installed.Where(m => m.Source == ModSource.Steam && m.WorkshopId is not null).Select(m => (m.WorkshopId!.Value, m.Enabled)).ToList();
+        if (!SteamOrder.Save(steamMods)) return;
+
+        Settings.SteamOrderSaved = DateTime.UtcNow;
+        Settings.Save();
+    }
+
+    async Task RestartSteamIfBehindAsync()
+    {
+        SaveSteamOrder();
+        if (SteamOrder.SteamStarted() is not { } started || started >= Settings.SteamOrderSaved) return;
+
+        Status.Work("Restarting Steam", "So Steam loads your mods in the same order as Flotilla");
+        Shell.Open("steam://exit");
+        for (var i = 0; i < 120 && SteamOrder.SteamStarted() is not null; i++) await Task.Delay(500);
+        SaveSteamOrder();
+        Status.Idle();
+    }
+
+    public async void PlayGame()
     {
         if (GameIsRunning())
         {
@@ -1208,6 +1225,7 @@ public sealed class Library : Observable
         }
 
         if (Settings.ClearCacheBeforePlay) ClearCache(quiet: true);
+        await RestartSteamIfBehindAsync();
         if (!Shell.Open($"steam://rungameid/{Workshop.AppId}")) Status.Warn("Couldn't start UBOAT through Steam. Is Steam installed?");
         else if (Settings.ClearCacheBeforePlay) Status.Say("Cleared UBOAT's cache and started the game. The first load takes a little longer while it rebuilds.");
     }
@@ -1247,6 +1265,7 @@ public sealed class Library : Observable
             if (tiles.TryGetValue(item.Id, out var tile)) tile.Refresh(item);
             else tile = new ModTile(item);
             tile.LoadFavourite(Settings.Favourites.Contains(item.Id));
+            tile.ShowGame(Settings.GameVersion);
             if (votes.TryGetValue(item.Id, out var count)) tile.ShowVotes(count, MyVote(item.Id));
             next[item.Id] = tile;
         }
@@ -1298,12 +1317,86 @@ public sealed class Library : Observable
         var on = Installed.Count(m => m.Enabled);
         InstalledSummary = Installed.Count switch
         {
-            0 => "Nothing installed yet.",
-            1 => on == 1 ? "1 mod, switched on." : "1 mod, switched off.",
-            _ => $"{Installed.Count} mods, {(on == Installed.Count ? "all" : on == 0 ? "none" : on.ToString())} switched on. UBOAT loads them from the top down, so the lower one wins when two change the same thing.",
+            0 => "",
+            1 => on == 1 ? "1 mod, switched on" : "1 mod, switched off",
+            _ => $"{Installed.Count} mods, {(on == Installed.Count ? "all" : on == 0 ? "none" : on.ToString())} switched on",
         };
+        var usable = Installed.Count(m => m.Source != ModSource.Missing);
+        var usableOn = Installed.Count(m => m.Enabled && m.Source != ModSource.Missing);
+        allOn = usable > 0 && usableOn == usable;
+        ToggleAllLabel = usableOn == 0 ? "Turn all on" : allOn ? "Turn all off" : "Turn on all mods";
         MarkProfiles();
         UpdateIssues();
+    }
+
+    public void ToggleAll() => SetAll(!allOn);
+
+    public async Task<OrderPlan?> BestOrderAsync()
+    {
+        var on = Installed.Where(m => m.Enabled && m.Source != ModSource.Missing).ToList();
+        if (on.Count < 2)
+        {
+            Status.Say("Switch on at least two mods first. With one mod on, there's no order to choose.");
+            return null;
+        }
+
+        Status.Work("Finding the best load order", "Checking what your mods need and what they change");
+        var mods = new List<OrderMod>();
+        try
+        {
+            foreach (var mod in on)
+            {
+                IReadOnlyList<ulong> needs = mod.WorkshopId is { } id ? await RequirementsOfAsync(id) : [];
+                var (sheets, text) = await Task.Run(() =>
+                {
+                    try
+                    {
+                        return LoadOrder.Contents(mod.Folder.Path!);
+                    }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                    {
+                        return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), false);
+                    }
+                });
+                var about = mod.Tile?.Item.Description ?? mod.Folder.Manifest?.Description ?? "";
+                mods.Add(new OrderMod(mod.Key, mod.Name, about, mod.WorkshopId, needs, sheets, text));
+            }
+        }
+        finally
+        {
+            Status.Idle();
+        }
+
+        var (order, reasons) = await Task.Run(() => LoadOrder.Best(mods));
+        var slots = on.Select(m => Installed.IndexOf(m)).ToList();
+        var ordered = order.Select(key => on.First(m => m.Key == key)).ToList();
+        var rows = ordered.Select((mod, i) =>
+        {
+            var was = Installed.IndexOf(mod) + 1;
+            var now = slots[i] + 1;
+            var move = now < was ? $"Up from {was}" : now > was ? $"Down from {was}" : null;
+            return new OrderRow(now.ToString(), mod.Name, move is null ? null : reasons.GetValueOrDefault(mod.Key), move);
+        }).ToList();
+        return new OrderPlan(ordered, rows, rows.Count(r => r.Move is not null));
+    }
+
+    public void UseOrder(OrderPlan plan)
+    {
+        if (GameIsRunning())
+        {
+            Status.Warn("Close UBOAT first. The load order can't be changed while the game or its launcher is open.");
+            return;
+        }
+
+        var all = Installed.ToList();
+        var slots = all.Select((mod, i) => (mod, i)).Where(x => plan.Order.Contains(x.mod)).Select(x => x.i).ToList();
+        if (slots.Count != plan.Order.Count) return;
+        for (var i = 0; i < slots.Count; i++) all[slots[i]] = plan.Order[i];
+
+        Installed.Clear();
+        foreach (var mod in all) Installed.Add(mod);
+        if (Save("Used the best load order"))
+            Status.Say(plan.Moves == 1 ? "Moved 1 mod into the best order. Your old order is in History." : $"Moved {plan.Moves} mods into the best order. Your old order is in History.");
     }
 
     public void SettingsChanged()
@@ -1339,3 +1432,7 @@ public sealed class Library : Observable
         return processes.Length > 0;
     }
 }
+
+public sealed record OrderRow(string Number, string Name, string? Reason, string? Move);
+
+public sealed record OrderPlan(List<InstalledMod> Order, List<OrderRow> Rows, int Moves);

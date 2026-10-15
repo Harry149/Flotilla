@@ -6,20 +6,27 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition/>
         </Grid.RowDefinitions>
 
-        <Grid Margin="28,10,28,22">
+        <Grid Margin="28,10,28,18">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <StackPanel>
-                <TextBlock Text="Installed" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="32"/>
-                <TextBlock Text="{Binding InstalledSummary}" Margin="0,6,0,0" MaxWidth="620" HorizontalAlignment="Left"
-                           TextWrapping="Wrap" LineHeight="22" Foreground="{StaticResource Muted}"/>
-                <WrapPanel Margin="0,8,0,0">
+            <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal">
+                <TextBlock Text="{Binding Source='Installed', Converter={StaticResource Upper}}" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="32"/>
+                <TextBlock Text="{Binding InstalledSummary}" Margin="14,0,0,7" VerticalAlignment="Bottom" Foreground="{StaticResource Muted}"/>
+            </StackPanel>
+
+            <StackPanel Grid.Row="1" Margin="0,12,0,0" VerticalAlignment="Center">
+                <WrapPanel>
                     <WrapPanel.Style>
                         <Style TargetType="WrapPanel">
                             <Style.Triggers>
@@ -29,16 +36,17 @@
                             </Style.Triggers>
                         </Style>
                     </WrapPanel.Style>
-                    <Button Style="{StaticResource Quiet}" Margin="0,0,20,0" Click="OnAllOn" ToolTip="Switch on every installed mod">
+                    <Button Style="{StaticResource Quiet}" Margin="0,0,20,0" Click="OnToggleAll" ToolTip="Switch every installed mod on, or every mod off. Mods you switch off stay installed.">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPower}" Style="{StaticResource Icon}" Width="13" Height="13" Margin="0,0,7,0"/>
-                            <TextBlock Text="Turn all on"/>
+                            <TextBlock Text="{Binding ToggleAllLabel}"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource Quiet}" Margin="0,0,20,0" Click="OnAllOff" ToolTip="Switch off every mod. They stay installed.">
+                    <Button Style="{StaticResource Quiet}" Margin="0,0,20,0" Click="OnBestOrder" ToolTip="Sorts the mods that are on by what they need and what they change, and shows you the new order first">
                         <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconPower}" Style="{StaticResource Icon}" Width="13" Height="13" Margin="0,0,7,0" Opacity="0.6"/>
-                            <TextBlock Text="Turn all off"/>
+                            <Path Data="{StaticResource IconSort}" Style="{StaticResource Icon}" Width="13" Height="13" Margin="0,0,7,0"/>
+                            <TextBlock Text="Find best load order"/>
+                            <ContentControl Style="{StaticResource BetaChip}"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource Quiet}" Margin="0,0,20,0" Click="OnHistory" ToolTip="Go back to how your mods were set up earlier">
@@ -54,16 +62,10 @@
                             <ContentControl Style="{StaticResource BetaChip}"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource Quiet}" Click="OnOpenLog" ToolTip="Open UBOAT's log from your last game">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconLog}" Style="{StaticResource Icon}" Width="13" Height="13" Margin="0,0,7,0"/>
-                            <TextBlock Text="Game log"/>
-                        </StackPanel>
-                    </Button>
                 </WrapPanel>
             </StackPanel>
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="24,0,0,0">
+            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="24,12,0,0">
                 <Button Margin="0,0,10,0" Click="OnUpdateAll" Content="{Binding UpdateCount}" ContentStringFormat="Update all ({0})">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource Primary}">
@@ -79,14 +81,14 @@
                         ToolTip="Get a code or link for the mods that are on, so friends can match your setup">
                     <StackPanel Orientation="Horizontal">
                         <Path Data="{StaticResource IconExport}" Style="{StaticResource Icon}" Width="14" Height="14" Margin="0,0,9,0"/>
-                        <TextBlock Text="Share"/>
+                        <TextBlock Text="{Binding Source='Share', Converter={StaticResource Upper}}"/>
                     </StackPanel>
                 </Button>
                 <Button Style="{StaticResource GhostButton}" Margin="0,0,10,0" Click="OnUseCode" IsEnabled="{Binding CanImport}"
                         ToolTip="Use a friend's share code to match their setup, or see how yours differs">
                     <StackPanel Orientation="Horizontal">
                         <Path Data="{StaticResource IconDownload}" Style="{StaticResource Icon}" Width="14" Height="14" Margin="0,0,9,0"/>
-                        <TextBlock Text="Use a code"/>
+                        <TextBlock Text="{Binding Source='Use a code', Converter={StaticResource Upper}}"/>
                     </StackPanel>
                 </Button>
                 <Button x:Name="MoreButton" Style="{StaticResource GhostButton}" Padding="12,0" Click="OnMore" AutomationProperties.Name="More">
@@ -97,6 +99,7 @@
                             <MenuItem Header="Export the mods that are on to a file" Click="OnExport"/>
                             <Separator/>
                             <MenuItem Header="Open the mods folder" Click="OnOpenFolder"/>
+                            <MenuItem Header="Open the game log from your last game" Click="OnOpenLog"/>
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
@@ -111,7 +114,7 @@
                       Width="20" Height="20" Margin="0,2,16,0" VerticalAlignment="Top"/>
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding BisectTitle}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="17"/>
+                        <TextBlock Text="{Binding BisectTitle, Converter={StaticResource Upper}}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="17"/>
                         <ContentControl Style="{StaticResource BetaChip}"/>
                     </StackPanel>
                     <TextBlock Text="{Binding BisectText}" Margin="0,4,0,0" FontSize="13.5" LineHeight="20" TextWrapping="Wrap" Foreground="{StaticResource Soft}"/>
@@ -125,7 +128,23 @@
                 </StackPanel>
             </DockPanel>
         </Border>
-        <ListBox x:Name="Order" Grid.Row="2" Margin="28,0,20,16" ItemsSource="{Binding Installed}"
+
+        <DockPanel Grid.Row="2" Margin="30,0,20,10">
+            <DockPanel.Style>
+                <Style TargetType="DockPanel">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Installed.Count}" Value="0">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DockPanel.Style>
+            <ToggleButton x:Name="HideOff" DockPanel.Dock="Right" Style="{StaticResource PillToggle}" Content="Hide switched-off mods"
+                          Click="OnHideOff" ToolTip="Only show the mods that are switched on"/>
+            <TextBlock x:Name="Hint" VerticalAlignment="Center" FontSize="12.5" Foreground="{StaticResource Faint}" TextTrimming="CharacterEllipsis"/>
+        </DockPanel>
+
+        <ListBox x:Name="Order" Grid.Row="3" Margin="28,0,20,16" ItemsSource="{Binding Installed}"
                  Background="Transparent" BorderThickness="0" Padding="0"
                  ItemContainerStyle="{StaticResource Row}"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -133,7 +152,7 @@
                  PreviewKeyDown="OnListKey" MouseDoubleClick="OnRowDoubleClick">
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <Grid Height="72" Background="Transparent">
+                    <Grid x:Name="RowRoot" Height="72" Background="Transparent">
                         <Grid.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Open mod page" Click="OnOpenPage"
@@ -157,8 +176,8 @@
                             <ColumnDefinition Width="36"/>
                             <ColumnDefinition Width="24"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
@@ -176,23 +195,26 @@
                         <TextBlock x:Name="Number" Grid.Column="1" Text="{Binding Ordinal}" HorizontalAlignment="Right" VerticalAlignment="Center"
                                    FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Muted}"/>
 
-                        <Grid x:Name="Thumb" Grid.Column="2" Width="96" Height="54" Margin="16,0">
-                            <Border CornerRadius="4" Background="{StaticResource Chip}">
+                        <ToggleButton Grid.Column="2" Style="{StaticResource Switch}" Margin="16,0,0,0" IsChecked="{Binding Enabled}" Click="OnToggle"
+                                      AutomationProperties.Name="{Binding Name}" ToolTip="Load this mod when UBOAT starts"/>
+
+                        <Grid x:Name="Thumb" Grid.Column="3" Width="96" Height="54" Margin="16,0">
+                            <Border CornerRadius="{StaticResource RoundSmall}" Background="{StaticResource Chip}">
                                 <Path Data="{StaticResource IconBox}" Style="{StaticResource Icon}" Stroke="{StaticResource Faint}" Width="18" Height="18"/>
                             </Border>
-                            <Border CornerRadius="4" RenderOptions.BitmapScalingMode="HighQuality">
+                            <Border CornerRadius="{StaticResource RoundSmall}" RenderOptions.BitmapScalingMode="HighQuality">
                                 <Border.Background>
                                     <ImageBrush ImageSource="{Binding Tile.Blur}" Stretch="UniformToFill"/>
                                 </Border.Background>
                             </Border>
-                            <Border CornerRadius="4">
+                            <Border CornerRadius="{StaticResource RoundSmall}">
                                 <Border.Background>
                                     <ImageBrush ImageSource="{Binding Tile.Thumbnail}" Stretch="Uniform"/>
                                 </Border.Background>
                             </Border>
                         </Grid>
 
-                        <StackPanel x:Name="Label" Grid.Column="3" Margin="0,0,16,0" VerticalAlignment="Center">
+                        <StackPanel x:Name="Label" Grid.Column="4" Margin="0,0,16,0" VerticalAlignment="Center">
                             <TextBlock x:Name="Title" Text="{Binding Name}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15.5"
                                        TextTrimming="CharacterEllipsis"/>
                             <DockPanel x:Name="Note" Margin="0,3,0,0" Background="Transparent" ToolTip="{Binding Details}">
@@ -202,17 +224,17 @@
                             </DockPanel>
                         </StackPanel>
 
-                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Style="{StaticResource GhostButton}" Height="30" Padding="14,0" FontSize="13" Margin="0,0,14,0"
                                     Content="Fix" Click="OnFix" ToolTip="Install what it needs, switch it on, and load it first"
                                     Visibility="{Binding CanFix, Converter={StaticResource Visible}}"/>
-                            <Button Style="{StaticResource IconButton}" Margin="0,0,10,0" Click="OnModSettings" ToolTip="Mod settings"
+                            <Button x:Name="Gear" Style="{StaticResource IconButton}" Margin="0,0,10,0" Opacity="0.45" Click="OnModSettings" ToolTip="Mod settings"
                                     AutomationProperties.Name="Mod settings" Visibility="{Binding HasSettings, Converter={StaticResource Visible}}">
                                 <Path Data="{StaticResource IconGear}" Style="{StaticResource Icon}" Width="15" Height="15"/>
                             </Button>
                         </StackPanel>
 
-                        <Button Grid.Column="5" Height="30" Padding="14,0" FontSize="13" Margin="0,0,14,0"
+                        <Button Grid.Column="6" Height="30" Padding="14,0" FontSize="13" Margin="0,0,14,0"
                                 Content="{Binding Tile.Action}" IsEnabled="{Binding Tile.CanInstall}" Tag="{Binding Tile.Progress}"
                                 ToolTip="{Binding Tile.UpdateNote}" Click="OnUpdate">
                             <Button.Style>
@@ -235,15 +257,12 @@
                             </Button.Style>
                         </Button>
 
-                        <Border x:Name="Source" Grid.Column="6" VerticalAlignment="Center" Padding="9,2,9,3" CornerRadius="10"
+                        <Border x:Name="Source" Grid.Column="7" Margin="0,0,12,0" VerticalAlignment="Center" Padding="9,2,9,3" CornerRadius="{StaticResource RoundLarge}"
                                 Background="{StaticResource Chip}" ToolTip="{Binding SourceTip}">
                             <TextBlock x:Name="SourceText" Text="{Binding SourceLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Soft}"/>
                         </Border>
 
-                        <ToggleButton Grid.Column="7" Style="{StaticResource Switch}" Margin="20,0,12,0" IsChecked="{Binding Enabled}" Click="OnToggle"
-                                      AutomationProperties.Name="{Binding Name}" ToolTip="Load this mod when UBOAT starts"/>
-
-                        <Button x:Name="Remove" Grid.Column="8" Style="{StaticResource IconButton}" Margin="0,0,14,0" VerticalAlignment="Center"
+                        <Button x:Name="Remove" Grid.Column="8" Style="{StaticResource IconButton}" Margin="0,0,14,0" Opacity="0.45" VerticalAlignment="Center"
                                 ToolTip="{Binding RemoveTip}" AutomationProperties.Name="{Binding RemoveTip}" Click="OnRemove">
                             <Grid>
                                 <Path x:Name="Bin" Data="{StaticResource IconTrash}" Style="{StaticResource Icon}"/>
@@ -255,6 +274,17 @@
                         <Trigger SourceName="Grip" Property="IsMouseOver" Value="True">
                             <Setter TargetName="GripDots" Property="Fill" Value="{StaticResource Soft}"/>
                         </Trigger>
+                        <Trigger SourceName="RowRoot" Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Gear" Property="Opacity" Value="1"/>
+                            <Setter TargetName="Remove" Property="Opacity" Value="1"/>
+                        </Trigger>
+                        <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                            <Setter TargetName="Gear" Property="Opacity" Value="1"/>
+                            <Setter TargetName="Remove" Property="Opacity" Value="1"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Source}" Value="Download">
+                            <Setter TargetName="Source" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
                         <DataTrigger Binding="{Binding Enabled}" Value="False">
                             <Setter TargetName="Label" Property="Opacity" Value="0.5"/>
                             <Setter TargetName="Thumb" Property="Opacity" Value="0.4"/>
@@ -280,13 +310,14 @@
                             <Setter TargetName="Remove" Property="Padding" Value="12,0"/>
                             <Setter TargetName="Remove" Property="Background" Value="{StaticResource DangerBack}"/>
                             <Setter TargetName="Remove" Property="Foreground" Value="{StaticResource Danger}"/>
+                            <Setter TargetName="Remove" Property="Opacity" Value="1"/>
                         </DataTrigger>
                     </DataTemplate.Triggers>
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,60">
+        <StackPanel Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,60">
             <StackPanel.Style>
                 <Style TargetType="StackPanel">
                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -298,17 +329,17 @@
                 </Style>
             </StackPanel.Style>
             <ui:Sonar Width="150" Height="150" Margin="0,0,0,24" ShowContacts="False"/>
-            <TextBlock Text="Nothing installed yet" HorizontalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed"
+            <TextBlock Text="{Binding Source='Nothing installed yet', Converter={StaticResource Upper}}" HorizontalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}"
                        FontWeight="SemiBold" FontSize="22"/>
             <TextBlock Text="Mods you install from Browse show up here, ready to switch on or off." Margin="0,8,0,0"
                        HorizontalAlignment="Center" Foreground="{StaticResource Muted}"/>
             <Button Style="{StaticResource Primary}" Content="Browse mods" Margin="0,20,0,0" HorizontalAlignment="Center" Click="OnBrowse"/>
         </StackPanel>
 
-        <StackPanel x:Name="NoMatch" Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,60,0,0" Visibility="Collapsed">
-            <TextBlock x:Name="NoMatchTitle" HorizontalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed"
+        <StackPanel x:Name="NoMatch" Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,60,0,0" Visibility="Collapsed">
+            <TextBlock x:Name="NoMatchTitle" HorizontalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}"
                        FontWeight="SemiBold" FontSize="22"/>
-            <TextBlock Text="Try part of the name, or clear the search with Esc." Margin="0,8,0,0" HorizontalAlignment="Center" Foreground="{StaticResource Muted}"/>
+            <TextBlock x:Name="NoMatchText" Margin="0,8,0,0" HorizontalAlignment="Center" Foreground="{StaticResource Muted}"/>
         </StackPanel>
     </Grid>
 </UserControl>

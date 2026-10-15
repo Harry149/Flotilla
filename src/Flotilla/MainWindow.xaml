@@ -42,7 +42,7 @@
                         <Border Width="28" Height="28" CornerRadius="7" Background="{StaticResource Mark}" BorderBrush="{StaticResource AccentRing}" BorderThickness="1">
                             <Path Data="{StaticResource IconSonar}" Style="{StaticResource Icon}" Stroke="{StaticResource Accent}" Width="18" Height="18" StrokeThickness="1.6"/>
                         </Border>
-                        <TextBlock Text="Flotilla" Margin="11,0,0,1" VerticalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="20"/>
+                        <TextBlock Text="Flotilla" Foreground="{StaticResource SideText}" Margin="11,0,0,1" VerticalAlignment="Center" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="20"/>
                     </StackPanel>
 
                     <StackPanel DockPanel.Dock="Top" Margin="14,6,14,0">
@@ -100,11 +100,11 @@
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPlay}" Style="{StaticResource Icon}" Stroke="{StaticResource OnAccent}" Fill="{StaticResource OnAccent}"
                                   Width="10" Height="11" StrokeThickness="1.4" Margin="0,0,10,0"/>
-                            <TextBlock Text="Play UBOAT"/>
+                            <TextBlock Text="{Binding Source='Play UBOAT', Converter={StaticResource Upper}}"/>
                         </StackPanel>
                     </Button>
 
-                    <Button DockPanel.Dock="Bottom" Style="{StaticResource Quiet}" Margin="24,0,14,10" HorizontalAlignment="Left" Click="OnHelp"
+                    <Button DockPanel.Dock="Bottom" Style="{StaticResource SideQuiet}" Margin="24,0,14,10" HorizontalAlignment="Left" Click="OnHelp"
                             ToolTip="A quick tour of Flotilla (F1)" AutomationProperties.Name="Help">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconHelp}" Style="{StaticResource Icon}" Width="15" Height="15" Margin="0,0,10,0"/>
@@ -112,8 +112,8 @@
                         </StackPanel>
                     </Button>
 
-                    <Border DockPanel.Dock="Bottom" DataContext="{Binding Status}" Margin="14,0,14,12" Padding="12" CornerRadius="6"
-                            Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1"
+                    <Border DockPanel.Dock="Bottom" DataContext="{Binding Status}" Margin="14,0,14,12" Padding="12" CornerRadius="{StaticResource Round}"
+                            Background="{StaticResource SideSurface}" BorderBrush="{StaticResource SideLine}" BorderThickness="1"
                             Visibility="{Binding IsWorking, Converter={StaticResource Visible}}">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -125,10 +125,10 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <Border Width="40" Height="40" CornerRadius="4" Background="{StaticResource Chip}">
+                            <Border Width="40" Height="40" CornerRadius="{StaticResource RoundSmall}" Background="{StaticResource Chip}">
                                 <Grid>
-                                    <Path Data="{StaticResource IconDownload}" Style="{StaticResource Icon}" Stroke="{StaticResource Muted}" Width="16" Height="16"/>
-                                    <Border CornerRadius="4">
+                                    <Path Data="{StaticResource IconDownload}" Style="{StaticResource Icon}" Stroke="{StaticResource SideMuted}" Width="16" Height="16"/>
+                                    <Border CornerRadius="{StaticResource RoundSmall}">
                                         <Border.Background>
                                             <ImageBrush ImageSource="{Binding WorkTile.Thumbnail}" Stretch="UniformToFill"/>
                                         </Border.Background>
@@ -137,8 +137,8 @@
                             </Border>
 
                             <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding WorkTitle}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding WorkDetail}" Margin="0,2,0,0" FontSize="12" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding WorkTitle}" Foreground="{StaticResource SideText}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding WorkDetail}" Margin="0,2,0,0" FontSize="12" Foreground="{StaticResource SideMuted}" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
 
                             <Grid Grid.Row="1" Grid.ColumnSpan="2" Height="4" Margin="0,12,0,0">
@@ -153,9 +153,19 @@
                     </Border>
 
                     <Grid DockPanel.Dock="Top" Margin="26,22,18,6">
-                        <TextBlock Text="PROFILES" VerticalAlignment="Center" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource Faint}"/>
-                        <Button Style="{StaticResource IconButton}" MinWidth="26" Height="26" HorizontalAlignment="Right" Click="OnNewProfile"
+                        <TextBlock Text="{Binding Source=Profiles, Converter={StaticResource Upper}}" VerticalAlignment="Center" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource SideFaint}"/>
+                        <Button MinWidth="26" Height="26" HorizontalAlignment="Right" Click="OnNewProfile"
                                 ToolTip="Save the mods that are switched on as a new profile" AutomationProperties.Name="New profile">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
+                                    <Setter Property="Foreground" Value="{StaticResource SideMuted}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Profiles.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Hidden"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <Path Data="{StaticResource IconPlus}" Style="{StaticResource Icon}" Width="12" Height="12" StrokeThickness="1.8"/>
                         </Button>
                     </Grid>
@@ -174,9 +184,9 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <Path x:Name="Mark" Data="{StaticResource IconLayers}" Style="{StaticResource Icon}" Stroke="{StaticResource Faint}" Width="14" Height="14"/>
+                                                <Path x:Name="Mark" Data="{StaticResource IconLayers}" Style="{StaticResource Icon}" Stroke="{StaticResource SideFaint}" Width="14" Height="14"/>
                                                 <TextBlock x:Name="Label" Grid.Column="1" Text="{Binding Name}" Margin="10,0,8,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Grid.Column="2" Text="{Binding Count}" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource Faint}"
+                                                <TextBlock Grid.Column="2" Text="{Binding Count}" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource SideFaint}"
                                                            ToolTip="Mods in this profile"/>
                                                 <Button x:Name="More" Grid.Column="3" Style="{StaticResource IconButton}" MinWidth="24" Height="24" Margin="4,0,0,0"
                                                         Click="OnProfileMore" Opacity="0" ContextMenu="{StaticResource ProfileMenu}" AutomationProperties.Name="Profile options">
@@ -191,7 +201,7 @@
                                             <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                 <Setter TargetName="Mark" Property="Data" Value="{StaticResource IconCheck}"/>
                                                 <Setter TargetName="Mark" Property="Stroke" Value="{StaticResource Accent}"/>
-                                                <Setter TargetName="Label" Property="Foreground" Value="{StaticResource Text}"/>
+                                                <Setter TargetName="Label" Property="Foreground" Value="{StaticResource SideText}"/>
                                                 <Setter TargetName="Label" Property="FontWeight" Value="SemiBold"/>
                                                 <Setter TargetName="Item" Property="ToolTip" Value="This profile is on. Right-click for more."/>
                                             </DataTrigger>
@@ -213,8 +223,8 @@
                                 </Style>
                             </StackPanel.Style>
                             <TextBlock Text="Save the mods you have switched on as a profile, then swap between setups in one click."
-                                       FontSize="12.5" LineHeight="19" TextWrapping="Wrap" Foreground="{StaticResource Faint}"/>
-                            <Button Style="{StaticResource Quiet}" Margin="0,8,0,0" HorizontalAlignment="Left" Click="OnNewProfile">
+                                       FontSize="12.5" LineHeight="19" TextWrapping="Wrap" Foreground="{StaticResource SideFaint}"/>
+                            <Button Style="{StaticResource SideQuiet}" Margin="0,8,0,0" HorizontalAlignment="Left" Click="OnNewProfile">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource IconPlus}" Style="{StaticResource Icon}" Width="11" Height="11" StrokeThickness="1.8" Margin="0,0,8,0"/>
                                     <TextBlock Text="New profile"/>
@@ -231,11 +241,14 @@
                     <RowDefinition/>
                 </Grid.RowDefinitions>
 
-                <views:WorkshopView x:Name="Browse" Grid.Row="1"/>
-                <views:InstalledView x:Name="InstalledPage" Grid.Row="1" Visibility="Collapsed"/>
-                <views:SettingsView x:Name="SettingsPage" Grid.Row="1" Visibility="Collapsed"/>
-                <views:CreditsView x:Name="CreditsPage" Grid.Row="1" Visibility="Collapsed"/>
-                <views:ModPage x:Name="Details" Grid.RowSpan="2" Visibility="Collapsed"/>
+                <Border Grid.RowSpan="2" Margin="{StaticResource PaperMargin}" Background="{StaticResource Paper}"
+                        BorderBrush="{StaticResource PaperLine}" BorderThickness="{StaticResource PaperEdge}"/>
+
+                <views:WorkshopView x:Name="Browse" Grid.Row="1" Margin="{StaticResource PaperInset}" ClipToBounds="True"/>
+                <views:InstalledView x:Name="InstalledPage" Grid.Row="1" Margin="{StaticResource PaperInset}" ClipToBounds="True" Visibility="Collapsed"/>
+                <views:SettingsView x:Name="SettingsPage" Grid.Row="1" Margin="{StaticResource PaperInset}" ClipToBounds="True" Visibility="Collapsed"/>
+                <views:CreditsView x:Name="CreditsPage" Grid.Row="1" Margin="{StaticResource PaperInset}" ClipToBounds="True" Visibility="Collapsed"/>
+                <views:ModPage x:Name="Details" Grid.RowSpan="2" Margin="{StaticResource PaperInsetFull}" ClipToBounds="True" Visibility="Collapsed"/>
 
                 <Grid Margin="28,0,12,0">
                     <Grid.ColumnDefinitions>
@@ -250,7 +263,7 @@
                     <StackPanel x:Name="Downloads" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
                                 Margin="16,0" Visibility="Collapsed" WindowChrome.IsHitTestVisibleInChrome="True" Background="Transparent"
                                 ToolTip="Times Flotilla has been downloaded from GitHub, counting updates">
-                        <Path Data="{StaticResource IconDownload}" Style="{StaticResource Icon}" Stroke="{StaticResource AccentText}" Width="14" Height="14" Margin="0,0,8,0"/>
+                        <Path x:Name="DownloadsIcon" Data="{StaticResource IconDownload}" Style="{StaticResource Icon}" Stroke="{StaticResource AccentText}" Width="14" Height="14" Margin="0,0,8,0"/>
                         <TextBlock x:Name="DownloadsText" VerticalAlignment="Center" FontSize="13" Foreground="{StaticResource Soft}" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
 
@@ -272,7 +285,7 @@
                 </Grid>
 
                 <Border Grid.Row="1" DataContext="{Binding Status}" Margin="0,0,28,24" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                        MaxWidth="460" Padding="14,10,8,10" CornerRadius="6" Background="{StaticResource Raised}" BorderBrush="{StaticResource Ghost}" BorderThickness="1"
+                        MaxWidth="460" Padding="14,10,8,10" CornerRadius="{StaticResource Round}" Background="{StaticResource Raised}" BorderBrush="{StaticResource Ghost}" BorderThickness="1"
                         Visibility="{Binding HasMessage, Converter={StaticResource Visible}}">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="24" ShadowDepth="8" Direction="270" Opacity="0.4" Color="Black"/>
@@ -302,7 +315,7 @@
             </Grid>
 
             <Grid x:Name="TutorialLayer" Grid.ColumnSpan="2" Background="#99020809" Visibility="Collapsed">
-                <Border Width="560" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="36,30,36,26" CornerRadius="10"
+                <Border Width="560" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="36,30,36,26" CornerRadius="{StaticResource RoundLarge}"
                         Background="{StaticResource Raised}" BorderBrush="{StaticResource AccentRing}" BorderThickness="1">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="60" ShadowDepth="18" Direction="270" Opacity="0.6" Color="Black"/>
@@ -316,7 +329,7 @@
                             <Button Style="{StaticResource Quiet}" HorizontalAlignment="Right" VerticalAlignment="Top" Content="Skip tour" Click="OnTutorialClose"/>
                         </Grid>
                         <TextBlock x:Name="TutorialStep" Margin="0,20,0,0" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource AccentText}"/>
-                        <TextBlock x:Name="TutorialTitle" Margin="0,4,0,0" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold"
+                        <TextBlock x:Name="TutorialTitle" Margin="0,4,0,0" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold"
                                    FontSize="28" TextWrapping="Wrap"/>
                         <TextBlock x:Name="TutorialBody" Margin="0,10,0,0" FontSize="14.5" LineHeight="23" TextWrapping="Wrap" Foreground="{StaticResource Soft}"/>
                         <ItemsControl x:Name="TutorialTips" Margin="0,14,0,0" Focusable="False">
@@ -339,7 +352,7 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border x:Name="Dot" Width="8" Height="8" Margin="0,0,6,0" CornerRadius="4" Background="{StaticResource Ghost}"/>
+                                        <Border x:Name="Dot" Width="8" Height="8" Margin="0,0,6,0" CornerRadius="{StaticResource RoundSmall}" Background="{StaticResource Ghost}"/>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding}" Value="True">
                                                 <Setter TargetName="Dot" Property="Width" Value="22"/>
@@ -359,14 +372,14 @@
             </Grid>
 
             <Grid x:Name="HistoryLayer" Grid.ColumnSpan="2" Background="#B3020809" Visibility="Collapsed" MouseLeftButtonDown="OnLayerBackground">
-                <Border Width="600" MaxHeight="640" Margin="0,40" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24,28,20" CornerRadius="10"
+                <Border Width="600" MaxHeight="640" Margin="0,40" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24,28,20" CornerRadius="{StaticResource RoundLarge}"
                         Background="{StaticResource Raised}" BorderBrush="{StaticResource Ghost}" BorderThickness="1" MouseLeftButtonDown="OnPanelClick">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="60" ShadowDepth="18" Direction="270" Opacity="0.6" Color="Black"/>
                     </Border.Effect>
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Top">
-                            <TextBlock Text="History" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="24"/>
+                            <TextBlock Text="{Binding Source='History', Converter={StaticResource Upper}}" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="24"/>
                             <TextBlock Text="Flotilla keeps a copy of your setup each time it changes: which mods were on, their order and their versions. Restore one to go back to it."
                                        Margin="0,6,0,14" FontSize="13.5" LineHeight="20" TextWrapping="Wrap" Foreground="{StaticResource Soft}"/>
                         </StackPanel>
@@ -375,7 +388,7 @@
                             <ItemsControl ItemsSource="{Binding Snapshots}" Focusable="False">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Margin="0,0,0,8" Padding="16,12" CornerRadius="6" Background="{StaticResource Card}" BorderBrush="{StaticResource CardLine}" BorderThickness="1">
+                                        <Border Margin="0,0,0,8" Padding="16,12" CornerRadius="{StaticResource Round}" Background="{StaticResource Card}" BorderBrush="{StaticResource CardLine}" BorderThickness="1">
                                             <DockPanel>
                                                 <Button x:Name="Restore" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Height="32" Padding="14,0" FontSize="13"
                                                         VerticalAlignment="Center" Content="Restore" Click="OnRestore"/>
@@ -403,15 +416,57 @@
                 </Border>
             </Grid>
 
-            <Grid x:Name="EditorLayer" Grid.ColumnSpan="2" Background="#B3020809" Visibility="Collapsed" MouseLeftButtonDown="OnLayerBackground">
-                <Border Width="680" MaxHeight="700" Margin="0,40" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24,28,20" CornerRadius="10"
+            <Grid x:Name="OrderLayer" Grid.ColumnSpan="2" Background="#B3020809" Visibility="Collapsed" MouseLeftButtonDown="OnLayerBackground">
+                <Border Width="600" MaxHeight="660" Margin="0,40" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24,28,20" CornerRadius="{StaticResource RoundLarge}"
                         Background="{StaticResource Raised}" BorderBrush="{StaticResource Ghost}" BorderThickness="1" MouseLeftButtonDown="OnPanelClick">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="60" ShadowDepth="18" Direction="270" Opacity="0.6" Color="Black"/>
                     </Border.Effect>
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Top">
-                            <TextBlock x:Name="EditorTitle" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="24" TextTrimming="CharacterEllipsis"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Source='Best load order', Converter={StaticResource Upper}}" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="24"/>
+                                <ContentControl Style="{StaticResource BetaChip}"/>
+                            </StackPanel>
+                            <TextBlock x:Name="OrderSummary" Margin="0,6,0,14" FontSize="13.5" LineHeight="20" TextWrapping="Wrap" Foreground="{StaticResource Soft}"/>
+                        </StackPanel>
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                            <Button Style="{StaticResource GhostButton}" Content="Keep my order" Margin="0,0,10,0" Click="OnCloseLayers"/>
+                            <Button Style="{StaticResource Primary}" Content="Use this order" MinWidth="120" Click="OnUseOrder"/>
+                        </StackPanel>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                            <ItemsControl x:Name="OrderRows" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="0,10" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                                            <DockPanel>
+                                                <TextBlock Text="{Binding Number}" Width="28" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15"
+                                                           Foreground="{StaticResource Muted}" VerticalAlignment="Top"/>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Move}" Margin="14,2,0,0" FontSize="12.5" Foreground="{StaticResource AccentText}" VerticalAlignment="Top"/>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Reason}" Margin="0,2,0,0" FontSize="12.5" LineHeight="18" TextWrapping="Wrap" Foreground="{StaticResource Muted}"
+                                                               Visibility="{Binding Reason, Converter={StaticResource VisibleWhenSet}}"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="EditorLayer" Grid.ColumnSpan="2" Background="#B3020809" Visibility="Collapsed" MouseLeftButtonDown="OnLayerBackground">
+                <Border Width="680" MaxHeight="700" Margin="0,40" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24,28,20" CornerRadius="{StaticResource RoundLarge}"
+                        Background="{StaticResource Raised}" BorderBrush="{StaticResource Ghost}" BorderThickness="1" MouseLeftButtonDown="OnPanelClick">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="60" ShadowDepth="18" Direction="270" Opacity="0.6" Color="Black"/>
+                    </Border.Effect>
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <TextBlock x:Name="EditorTitle" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="24" TextTrimming="CharacterEllipsis"/>
                             <ItemsControl x:Name="EditorFiles" Margin="0,10,0,0" Focusable="False">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -471,13 +526,13 @@
             </Grid>
 
             <Grid x:Name="DialogLayer" Grid.ColumnSpan="2" Background="#B3020809" Visibility="Collapsed">
-                <Border Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24" CornerRadius="10"
+                <Border Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24" CornerRadius="{StaticResource RoundLarge}"
                         Background="{StaticResource Raised}" BorderBrush="{StaticResource Ghost}" BorderThickness="1">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="60" ShadowDepth="18" Direction="270" Opacity="0.6" Color="Black"/>
                     </Border.Effect>
                     <StackPanel>
-                        <TextBlock x:Name="DialogTitle" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="22" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="DialogTitle" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="22" TextWrapping="Wrap"/>
                         <TextBlock x:Name="DialogText" Margin="0,8,0,0" FontSize="13.5" LineHeight="21" TextWrapping="Wrap" Foreground="{StaticResource Soft}"
                                    Visibility="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource VisibleWhenSet}}"/>
                         <TextBox x:Name="DialogInput" Style="{StaticResource Field}" Margin="0,16,0,0" MaxLength="40" TextChanged="OnDialogInput" AutomationProperties.Name="Name"/>

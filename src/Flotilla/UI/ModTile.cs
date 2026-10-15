@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using System.Windows.Media;
+using Flotilla.Mods;
 using Flotilla.Steam;
 using Flotilla.Text;
 
@@ -42,6 +43,24 @@ public sealed class ModTile : Observable
     public ImageSource? Thumbnail => thumbnail.Value;
     public ImageSource? Preview => preview.Value;
     public ImageSource? Blur => blur.Value;
+
+    public string CardTitle => GameLog.SplitTitle(Title).Title;
+    public string? MadeFor => GameLog.SplitTitle(Title).Version;
+    public bool MadeForOther => MadeFor is { } made && game is { } have && !GameLog.Supports([made], have);
+    public string? MadeForTip => MadeFor is not { } made ? null
+        : game is null ? $"Made for UBOAT {made}."
+        : MadeForOther ? $"Made for UBOAT {made}. You have {game}, so it may not work."
+        : $"Made for UBOAT {made}, the version you have.";
+
+    string? game;
+
+    public void ShowGame(string? version)
+    {
+        if (game == version) return;
+        game = version;
+        Raise(nameof(MadeForOther));
+        Raise(nameof(MadeForTip));
+    }
 
     public string Summary => summary ??= Shorten(Spaces.Replace(BBCode.Parse(Item.Description).Prose, " ").Trim(), 190);
 

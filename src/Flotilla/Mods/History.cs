@@ -122,7 +122,11 @@ public sealed record Bisect(IReadOnlyList<PackEntry> Original, IReadOnlyList<str
         }
     }
 
-    public void Save(string path) => File.WriteAllText(path, JsonSerializer.Serialize(this));
+    public void Save(string path)
+    {
+        File.WriteAllText(path + ".tmp", JsonSerializer.Serialize(this));
+        File.Move(path + ".tmp", path, overwrite: true);
+    }
 }
 
 public static class ShareCodes

@@ -124,6 +124,10 @@ Check(log.Report(new Dictionary<string, string> { ["nosedown"] = "Nose Down" }, 
 Check(GameLog.Supports(["2026.1"], "2026.1 Patch 21") && GameLog.Supports(["2026.1 patch 18", "2026.1 Patch 21"], "2026.1 Patch 21"), "a mod for this release or this exact patch is fine");
 Check(!GameLog.Supports(["2024.1 (Full Release)"], "2026.1 Patch 21") && !GameLog.Supports(["2026.1 Patch 15"], "2026.1 Patch 21"), "a mod only for another release or patch is flagged");
 Check(GameLog.Supports([], "2026.1 Patch 21"), "a mod that names no version isn't flagged");
+Check(GameLog.SplitTitle("[2024.1] Enhanced Identification Book") == ("Enhanced Identification Book", "2024.1")
+    && GameLog.SplitTitle("[2026.1 Patch 21] Nose Down") == ("Nose Down", "2026.1"), "a game version at the start of a title is split off");
+Check(GameLog.SplitTitle("Uboats: Coop Multiplayer") == ("Uboats: Coop Multiplayer", null)
+    && GameLog.SplitTitle("[WIP] Nose Down") == ("[WIP] Nose Down", null) && GameLog.SplitTitle("[2026.1]") == ("[2026.1]", null), "other titles are left alone");
 Console.WriteLine("Mod settings");
 var txtSettings = SettingsFile.FromLines("NoseDownConfig.txt", "# Nose Down settings.\r\n# Edit a value.\r\n\r\n# Multiplier on every trim angle.\r\n# Allowed range 0.25 to 2.0.\r\nangleScale=1\r\n\r\n# First-person view leans.\r\nenableFPPTilt=true\r\n\r\nenabled=True\r\nname = Kaleun\r\n")!;
 Check(txtSettings.About == "Nose Down settings. Edit a value." && txtSettings.Fields.Count == 4, "a key=value file's heading and settings are read");
@@ -335,6 +339,42 @@ Console.WriteLine("Steam library");
 var vdf = "\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"C:\\\\Program Files (x86)\\\\Steam\"\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"D:\\\\SteamLibrary\"\n\t}\n}";
 Check(SteamLibrary.LibraryPaths(vdf).SequenceEqual([@"C:\Program Files (x86)\Steam", @"D:\SteamLibrary"]), "library folders from libraryfolders.vdf");
 
+Console.WriteLine("Best load order");
+HashSet<string> Sheets(params string[] names) => new(names, StringComparer.OrdinalIgnoreCase);
+OrderMod Mod(string key, string name, ulong? id = null, ulong[]? needs = null, HashSet<string>? sheets = null, bool text = false, string about = "") =>
+    new(key, name, about, id, needs ?? [], sheets ?? Sheets(), text);
+var (best, why) = LoadOrder.Best([Mod("a", "Sea Spray Plus", 2, needs: [1]), Mod("b", "Hull Pitch", 1)]);
+Check(best.SequenceEqual(["b", "a"]) && why["b"] == "Sea Spray Plus needs it", "a mod loads after what it needs");
+(best, why) = LoadOrder.Best([Mod("p", "[2026.1] Nose Down Patch"), Mod("x", "Shadow Zone"), Mod("n", "[2026.1] Nose Down")]);
+Check(best.SequenceEqual(["x", "n", "p"]) && why["p"] == "Made for Nose Down, so it loads after it", "a patch loads after the mod it's for");
+(best, _) = LoadOrder.Best([Mod("c", "Compat fix", about: "Makes Shadow Zone work with Nose Down"), Mod("s", "Shadow Zone")]);
+Check(best.SequenceEqual(["s", "c"]), "a compatibility mod loads after a mod its description names");
+(best, why) = LoadOrder.Best([Mod("t", "German Text", sheets: Sheets("Locales.xlsx"), text: true), Mod("g", "Gameplay")]);
+Check(best.SequenceEqual(["g", "t"]) && why["t"] == "Only changes text, so it loads last", "text-only mods load last");
+(best, _) = LoadOrder.Best([Mod("small", "Crew Names", sheets: Sheets("Crew.xlsx")), Mod("big", "Overhaul", sheets: Sheets("Crew.xlsx", "Ships.xlsx", "Weapons.xlsx"))]);
+Check(best.SequenceEqual(["big", "small"]), "a mod changing more data sheets loads before a smaller one sharing a sheet");
+(best, _) = LoadOrder.Best([Mod("x", "One", sheets: Sheets("Crew.xlsx")), Mod("y", "Two", sheets: Sheets("Ships.xlsx", "Guns.xlsx")), Mod("z", "Three")]);
+Check(best.SequenceEqual(["x", "y", "z"]), "mods no rule covers keep their order");
+(best, _) = LoadOrder.Best([Mod("a", "Alpha", 1, needs: [2]), Mod("b", "Bravo", 2, needs: [1])]);
+Check(best.Count == 2 && best.ToHashSet().SetEquals(["a", "b"]), "mods that need each other don't break the sort");
+(best, _) = LoadOrder.Best([Mod("small", "Crew Names", 1, sheets: Sheets("Crew.xlsx")), Mod("big", "Overhaul", 2, needs: [1], sheets: Sheets("Crew.xlsx", "Ships.xlsx"))]);
+Check(best.SequenceEqual(["small", "big"]), "what a mod needs beats the data sheet rule");
+
+Console.WriteLine("Steam's load order");
+var subscriptions = "\"subscribedfiles\"\n{\n\t\"appid\"\t\t\"494840\"\n\t\"time_last_updated\"\t\t\"1791999816\"\n"
+    + "\t\"0\"\n\t{\n\t\t\"publishedfileid\"\t\t\"111\"\n\t\t\"time_subscribed\"\t\t\"1\"\n\t\t\"disabled_locally\"\t\t\"0\"\n\t}\n"
+    + "\t\"1\"\n\t{\n\t\t\"publishedfileid\"\t\t\"222\"\n\t\t\"time_subscribed\"\t\t\"2\"\n\t\t\"disabled_locally\"\t\t\"0\"\n\t}\n"
+    + "\t\"2\"\n\t{\n\t\t\"publishedfileid\"\t\t\"333\"\n\t\t\"time_subscribed\"\t\t\"3\"\n\t\t\"disabled_locally\"\t\t\"1\"\n\t}\n}\n";
+var arranged = SteamOrder.Arrange(subscriptions, [(333, true), (111, false)]);
+string[] SteamIds(string text) => [.. System.Text.RegularExpressions.Regex.Matches(text, "\"publishedfileid\"\\s*\"(\\d+)\"").Select(m => m.Groups[1].Value)];
+Check(SteamIds(arranged).SequenceEqual(["333", "111", "222"]), "Steam's order follows Flotilla's, and mods Flotilla doesn't list go last");
+Check(arranged.Contains("\t\"0\"\n\t{\n\t\t\"publishedfileid\"\t\t\"333\"") && arranged.Contains("\t\"2\"\n\t{\n\t\t\"publishedfileid\"\t\t\"222\"")
+    && arranged.StartsWith("\"subscribedfiles\"\n{\n\t\"appid\"") && arranged.EndsWith("\t}\n}\n"), "entries are renumbered and the rest of the file is kept");
+Check(arranged.Contains("\"333\"\n\t\t\"time_subscribed\"\t\t\"3\"\n\t\t\"disabled_locally\"\t\t\"0\"")
+    && arranged.Contains("\"111\"\n\t\t\"time_subscribed\"\t\t\"1\"\n\t\t\"disabled_locally\"\t\t\"1\"")
+    && arranged.Contains("\"222\"\n\t\t\"time_subscribed\"\t\t\"2\"\n\t\t\"disabled_locally\"\t\t\"0\""), "Steam's tick boxes match Flotilla's switches, and unknown mods keep theirs");
+Check(SteamOrder.Arrange(arranged, [(333, true), (111, false)]) == arranged, "an order that already matches leaves the file unchanged");
+
 Console.WriteLine("Manifests and folders");
 string Folder(string path, string? manifest = null)
 {
@@ -409,6 +449,44 @@ if (!OperatingSystem.IsWindows())
     var watch = Stopwatch.StartNew();
     results = await new SteamCmd(root) { StallAfter = TimeSpan.FromSeconds(1.5) }.DownloadAsync([(7, 1)], new Progress<SteamCmdEvent>(_ => { }));
     Check(watch.Elapsed < TimeSpan.FromSeconds(10) && results[7] == "SteamCMD stopped responding", $"a stalled SteamCMD is stopped ({watch.Elapsed.TotalSeconds:0.0} s)");
+}
+
+if (OperatingSystem.IsWindows())
+{
+    Console.WriteLine("SteamCMD's download folder");
+    var steamRoot = Path.Combine(temp, "steamcmd-link");
+    var firstMods = Path.Combine(temp, "first", "Mods");
+    var secondMods = Path.Combine(temp, "second", "Mods");
+    Directory.CreateDirectory(steamRoot);
+    var linked = new SteamCmd(steamRoot) { Executable = Environment.ProcessPath! };
+    await linked.PrepareAsync(firstMods, new Progress<string>(_ => { }));
+    await linked.PrepareAsync(secondMods, new Progress<string>(_ => { }));
+    var content = Path.Combine(steamRoot, "steamapps", "workshop", "content", "494840");
+    File.WriteAllText(Path.Combine(content, "probe.txt"), "x");
+    Check(File.Exists(Path.Combine(secondMods, "probe.txt")) && !File.Exists(Path.Combine(firstMods, "probe.txt")), "downloads follow a new UBOAT data folder");
+    Directory.Delete(content);
+}
+
+Console.WriteLine("Rolling back");
+{
+    var mod = Path.Combine(temp, "rollback", "123");
+    var backup = Path.Combine(temp, "rollback-backup", "files");
+    Directory.CreateDirectory(Path.Combine(mod, "Data"));
+    File.WriteAllText(Path.Combine(mod, "Data", "v.txt"), "new");
+    Directory.CreateDirectory(Path.Combine(backup, "Data"));
+    File.WriteAllText(Path.Combine(backup, "Data", "v.txt"), "old");
+    Folders.Replace(mod, backup);
+    Check(File.ReadAllText(Path.Combine(mod, "Data", "v.txt")) == "old" && !Directory.Exists(mod + ".newer"), "the backup takes the mod's place");
+
+    try
+    {
+        Folders.Replace(mod, Path.Combine(temp, "no such backup"));
+        Check(false, "a missing backup fails");
+    }
+    catch (IOException)
+    {
+        Check(File.ReadAllText(Path.Combine(mod, "Data", "v.txt")) == "old" && !Directory.Exists(mod + ".newer"), "a failed swap puts the mod back where it was");
+    }
 }
 
 Directory.Delete(temp, recursive: true);

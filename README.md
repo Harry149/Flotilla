@@ -13,7 +13,7 @@ dotnet run --project src/Flotilla
 To make a single `Flotilla.exe` you can hand to someone:
 
 ```
-dotnet publish src/Flotilla -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+dotnet publish src/Flotilla -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
 ```
 
 The tests run on Windows, macOS or Linux:
@@ -37,6 +37,8 @@ dotnet run --project tests/Flotilla.Tests
 
 Flotilla rewrites that file whenever you change something, keeping its line endings. Before the first change it keeps a copy as `modlist.txt.bak`. Disabled mods aren't in `modlist.txt` at all, so Flotilla remembers where they sat in `%LOCALAPPDATA%\Flotilla\order.txt`. Turning one back on puts it back in the same place. If you change mods in UBOAT's launcher, Flotilla picks that up the next time its window gets focus.
 
+**Steam's load order** follows Flotilla's too. Steam keeps the order and tick box of each Workshop subscription in `userdata\<account>\ugc\494840_subscriptions.vdf` in its folder, with "0" loading first. Flotilla rewrites that file whenever it saves, putting the subscriptions in its own order and ticking only the ones switched on. Steam only reads the file when it starts, so if Steam was already open when Flotilla last changed it, Play UBOAT closes Steam first and the game starts it again.
+
 **Export and Import** share a setup. Export saves a text file listing every mod that's switched on, in load order, one per line: the Workshop ID, the exact version (the Steam manifest ID, or `latest` when Flotilla doesn't know it), and the name. Import reads that file and installs each mod at that version with SteamCMD's `download_depot`. If Steam no longer has that version, Import installs the latest one and says so. It then switches on exactly the mods in the file, in its order. Mods that aren't in the file stay installed, switched off. A mod you subscribe to in Steam is used as it is, because Steam decides its version. A local mod is only switched on if a folder with that name is already in the Mods folder. Flotilla records the versions it installed this way in `steamcmd\versions.txt`, so the Update button still knows when the Workshop has something newer.
 
 **Profiles** save which mods are switched on and their load order, under a name, in `%LOCALAPPDATA%\Flotilla\profiles.json`. Press + next to Profiles in the sidebar to save the current setup, and click a profile to switch to it: its mods are switched on in its order and everything else is switched off. A Workshop mod in the profile that isn't installed is installed first and slotted into place. A mod saved from Flotilla matches the same mod subscribed in Steam, and the other way round. Right-click a profile to update it with the mods that are on now, rename, reorder or delete it.
@@ -51,6 +53,8 @@ Flotilla rewrites that file whenever you change something, keeping its line endi
 
 **Settings** holds the switches for all of the above, update checks, a different UBOAT data folder, and shortcuts to the data, Mods and Flotilla folders and the game log. Favourites (the star on a mod) are kept there too.
 
+**Themes.** Settings, then Look, switches between Sonar (Flotilla's teal look) and Logbook (cream paper panels and condensed capitals, like UBOAT's own menus). Each theme is one file in `src/Flotilla/Theme` (`Sonar.xaml`, `Logbook.xaml`) holding every colour, font and corner shape. Flotilla reopens in the chosen theme straight away.
+
 **Share codes.** Share on Installed (or Share it with a code on a profile) uploads the mod list, the same text Export writes, to the Flotilla API and returns a code like `FLT-8K2QR7` and a link, `https://flotilla-api.tyrrh019-851.workers.dev/s/8K2QR7`. The link opens a page listing the mods, with a button that opens `flotilla://setup/8K2QR7`; Flotilla registers that scheme for the current user when the published exe runs, and a second copy hands the link to the one already open. Use a code shows what would change (mods to install, switch on or off, versions, order) before matching it, then saves the setup as a profile.
 
 **History and rollback.** Every change to which mods are on, their order or their versions is saved to `history.json` (the last 40, quick changes merged), and Restore puts a setup back, downloading other versions where needed. Before updating a mod it installed, Flotilla copies the old version to `backups\<id>` (mods over 1.5 GB keep only the version number), so Roll back to the previous version on the mod's menu can swap it back and pin that version.
@@ -63,7 +67,7 @@ Flotilla rewrites that file whenever you change something, keeping its line endi
 
 **What's new** on a mod's page, and in the prompt before updating, comes from the mod's Workshop change notes.
 
-**Updating Flotilla itself** happens on launch: Flotilla asks GitHub for the latest release of this repo, and if its version is newer than the one running, it offers to update. Saying yes downloads that release's `Flotilla.exe`, checks its size and SHA-256 against what GitHub reports, swaps it in place of the running copy (the old one is kept as `Flotilla.exe.old` until the next start) and restarts. Drafts and pre-releases are never offered. To ship an update:
+**Updating Flotilla itself** happens while it's open: Flotilla asks GitHub for the latest release of this repo when it starts and every minute after, sending the release's ETag so the checks don't use up GitHub's limit. When a newer version is out, it quietly downloads that release's `Flotilla.exe` as `Flotilla.exe.new` and checks its size and SHA-256 against what GitHub reports. Once UBOAT isn't running, it offers to update. Saying yes swaps it in place of the running copy (the old one is kept as `Flotilla.exe.old` until the next start) and opens the new version in the same place and tab before the old window closes, so it doesn't look like a restart. Not now keeps the download, and that version isn't offered again until Flotilla restarts. Drafts and pre-releases are never offered. To ship an update:
 
 1. Raise `<Version>` in `src/Flotilla/Flotilla.csproj`, for example to `0.1.3`.
 2. Publish `Flotilla.exe` with the command above.
@@ -73,13 +77,12 @@ Flotilla rewrites that file whenever you change something, keeping its line endi
 
 **Uninstalling** deletes the mod's folder for anything in the Mods folder. A Steam subscription can only be removed by Steam, so for those the button opens the mod in Steam, where you unsubscribe.
 
-Changes are refused while `Flotilla.exe` is running, because the game reads and rewrites `modlist.txt` itself. Play UBOAT in the sidebar starts the game through Steam.
+Changes are refused while `UBOAT.exe` or the UBOAT launcher is running, because the game reads and rewrites `modlist.txt` itself. Play UBOAT in the sidebar starts the game through Steam.
 
 ## Limits
 
 - Mods that need the Type IX DLC, or that Steam won't hand out anonymously, fail with a message saying so. Subscribe to those in Steam instead (Open in Steam on the mod's page), and Flotilla picks them up. SteamCMD can't borrow the Steam app's sign-in, so Flotilla never asks for Steam credentials.
 - `Flotilla.exe` isn't code-signed, so Windows SmartScreen warns the first time it runs, and PCs with Smart App Control switched on block it.
-- Dependencies listed on a Workshop page aren't installed automatically.
 - Updates are checked against the Workshop list Flotilla last read, which refreshes every time it starts. A mod Flotilla installed before this version, or one SteamCMD has no record of, won't show an Update button until you reinstall it once.
 - Load order controls data sheets, textures and sounds. Each code mod sets its own Harmony patch order.
 

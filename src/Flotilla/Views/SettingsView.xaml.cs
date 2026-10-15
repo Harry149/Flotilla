@@ -15,6 +15,8 @@ public partial class SettingsView : UserControl
         {
             if (!IsVisible || DataContext is not Library library) return;
 
+            SonarTheme.IsChecked = Themes.Current == Themes.Sonar;
+            LogbookTheme.IsChecked = Themes.Current == Themes.Logbook;
             VersionText.Text = $"You have Flotilla {Updater.Current}. New versions come from GitHub, and Flotilla asks before installing one.";
             FolderText.Text = library.Settings.DataFolder is { Length: > 0 } custom
                 ? $"{custom}{(custom == Paths.Game ? "" : " (used after Flotilla restarts)")}"
@@ -31,6 +33,15 @@ public partial class SettingsView : UserControl
     public event Action? UpdateCheckRequested;
     public event Action? RestartRequested;
     public event Action? CountMeChanged;
+    public event Action? ThemeChanged;
+
+    void OnTheme(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RadioButton { Tag: string theme } || theme == Themes.Current) return;
+        Library.Settings.Theme = theme;
+        Library.Settings.Save();
+        ThemeChanged?.Invoke();
+    }
 
     Library Library => (Library)DataContext;
 

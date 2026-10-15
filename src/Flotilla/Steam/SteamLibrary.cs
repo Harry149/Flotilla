@@ -10,9 +10,19 @@ public static class SteamLibrary
 
     static readonly Regex LibraryPath = new("\"path\"\\s+\"([^\"]+)\"", RegexOptions.Compiled);
 
+    static string Root => Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string ?? DefaultSteam;
+
+    public static IEnumerable<string> SubscriptionFiles()
+    {
+        var users = Path.Combine(Root, "userdata");
+        return Directory.Exists(users)
+            ? Directory.EnumerateDirectories(users).Select(user => Path.Combine(user, "ugc", $"{Workshop.AppId}_subscriptions.vdf")).Where(File.Exists)
+            : [];
+    }
+
     public static string? WorkshopFolder()
     {
-        var steam = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string ?? DefaultSteam;
+        var steam = Root;
         var folders = Path.Combine(steam, "steamapps", "libraryfolders.vdf");
         string[] libraries = File.Exists(folders) ? [steam, .. LibraryPaths(File.ReadAllText(folders))] : [steam];
 

@@ -1,11 +1,12 @@
 <UserControl x:Class="Flotilla.Views.CreditsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Flotilla.UI">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" ui:ScrollFade.Enabled="True">
         <StackPanel Margin="28,10,28,40" MaxWidth="720" HorizontalAlignment="Left">
-            <TextBlock Text="Credits" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="32"/>
+            <TextBlock Text="{Binding Source='Credits', Converter={StaticResource Upper}}" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="32"/>
 
-            <Border Margin="0,24,0,0" Padding="28,26" CornerRadius="10" Background="{StaticResource Card}"
+            <Border Margin="0,24,0,0" Padding="28,26" CornerRadius="{StaticResource RoundLarge}" Background="{StaticResource Card}"
                     BorderBrush="{StaticResource AccentRing}" BorderThickness="1">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
@@ -13,7 +14,7 @@
                             <Path Data="{StaticResource IconSonar}" Style="{StaticResource Icon}" Stroke="{StaticResource Accent}" Width="28" Height="28"/>
                         </Border>
                         <StackPanel Margin="18,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="Made by Harry" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="26"/>
+                            <TextBlock Text="{Binding Source='Made by Harry', Converter={StaticResource Upper}}" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="26"/>
                             <TextBlock x:Name="VersionText" Margin="0,2,0,0" FontSize="13" Foreground="{StaticResource Muted}"/>
                         </StackPanel>
                     </StackPanel>
@@ -38,8 +39,8 @@
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="Why donate?" Margin="0,32,0,12" FontFamily="{StaticResource Display}" FontStretch="SemiCondensed" FontWeight="SemiBold" FontSize="20"/>
-            <Border Padding="24,18" CornerRadius="6" Background="{StaticResource Card}" BorderBrush="{StaticResource CardLine}" BorderThickness="1">
+            <TextBlock Text="{Binding Source='Why donate?', Converter={StaticResource Upper}}" Margin="0,32,0,12" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="20"/>
+            <Border Padding="24,18" CornerRadius="{StaticResource Round}" Background="{StaticResource Card}" BorderBrush="{StaticResource CardLine}" BorderThickness="1">
                 <StackPanel>
                     <DockPanel Margin="0,4,0,12">
                         <Path Data="{StaticResource IconCheck}" Style="{StaticResource Icon}" Stroke="{StaticResource Accent}" Width="13" Height="13"

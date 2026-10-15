@@ -7,10 +7,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Flotilla</RootNamespace>
-    <Version>1</Version>
+    <Version>1.1.0</Version>
     <Product>Flotilla</Product>
     <Description>Mod manager for UBOAT</Description>
     <ApplicationIcon>Flotilla.ico</ApplicationIcon>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
 </Project>

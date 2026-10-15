@@ -214,7 +214,7 @@ public static class BbDocument
             {
                 Width = 68,
                 Height = 48,
-                CornerRadius = new CornerRadius(12),
+                CornerRadius = Resource<CornerRadius>("RoundLarge"),
                 Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x0B, 0x14, 0x14)),
                 BorderBrush = Resource<Brush>("AccentRing"),
                 BorderThickness = new Thickness(1),

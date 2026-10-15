@@ -9,6 +9,7 @@ public static class Links
 {
     const string Pipe = "Flotilla.Links";
     const string Scheme = "flotilla";
+    public const string Handover = "--handover";
 
     static Mutex? single;
 
@@ -20,7 +21,7 @@ public static class Links
     {
         Pending = args.FirstOrDefault(a => a.StartsWith(Scheme + ":", StringComparison.OrdinalIgnoreCase));
         single = new Mutex(true, @"Local\Flotilla.Single", out var first);
-        if (first) return true;
+        if (first || args.Contains(Handover)) return true;
 
         try
         {
@@ -45,7 +46,7 @@ public static class Links
                 if (await reader.ReadLineAsync() is { } message)
                     Application.Current?.Dispatcher.BeginInvoke(() => Received?.Invoke(message));
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 await Task.Delay(1000);
             }
