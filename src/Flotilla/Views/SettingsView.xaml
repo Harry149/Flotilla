@@ -43,30 +43,38 @@
             <TextBlock Text="{Binding Source='Settings', Converter={StaticResource Upper}}" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="32"/>
             <TextBlock Text="Changes save as soon as you make them." Margin="0,6,0,0" Foreground="{StaticResource Muted}"/>
 
-            <TextBlock Text="{Binding Source='Look', Converter={StaticResource Upper}}" Style="{StaticResource Section}"/>
-            <Border Style="{StaticResource Panel}">
-                <StackPanel Margin="0,12">
-                    <TextBlock Text="Theme" Style="{StaticResource Label}"/>
-                    <TextBlock Style="{StaticResource Hint}" Text="Sonar is Flotilla's teal look. Logbook looks like UBOAT's own menus."/>
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <RadioButton x:Name="SonarTheme" Style="{StaticResource Pill}" GroupName="Theme" Content="Sonar" Tag="Sonar" Checked="OnTheme"/>
-                        <RadioButton x:Name="LogbookTheme" Style="{StaticResource Pill}" GroupName="Theme" Content="Logbook" Tag="Logbook" Checked="OnTheme"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
             <TextBlock Text="{Binding Source='Playing', Converter={StaticResource Upper}}" Style="{StaticResource Section}"/>
             <Border Style="{StaticResource Panel}">
                 <StackPanel>
                     <DockPanel Style="{StaticResource Option}">
                         <ToggleButton DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,2,0,0"
-                                      IsChecked="{Binding Settings.ClearCacheBeforePlay}" Click="OnChanged" AutomationProperties.Name="Clear UBOAT's cache before playing"/>
+                                      IsChecked="{Binding Settings.ClearCacheBeforePlay}" Click="OnChanged" AutomationProperties.Name="Clear UBOAT's cache when your mods change"/>
                         <StackPanel>
-                            <TextBlock Text="Clear UBOAT's cache before playing" Style="{StaticResource Label}"/>
+                            <TextBlock Text="Clear UBOAT's cache when your mods change" Style="{StaticResource Label}"/>
                             <TextBlock Style="{StaticResource Hint}"
-                                       Text="Play UBOAT first empties the Cache, Temp and Data Sheets folders the game rebuilds on launch, so leftovers from old or removed mods can't cause trouble. The first load takes a little longer."/>
+                                       Text="When you've added, removed, reordered or updated mods since your last game, Play UBOAT empties the Cache, Temp and Data Sheets folders the game rebuilds, so leftovers can't cause trouble. When nothing changed, the cache is kept, so big mod packs load much faster."/>
                             <Button x:Name="ClearNow" Style="{StaticResource GhostButton}" Height="32" Padding="14,0" FontSize="13" Margin="0,12,0,0"
                                     HorizontalAlignment="Left" Click="OnClearCache" Content="Clear now"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource Rule}"/>
+                    <DockPanel Style="{StaticResource Option}">
+                        <ToggleButton DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,2,0,0"
+                                      IsChecked="{Binding Settings.PrioritiseGame}" Click="OnChanged" AutomationProperties.Name="Give UBOAT priority while it runs"/>
+                        <StackPanel>
+                            <TextBlock Text="Give UBOAT priority while it runs" Style="{StaticResource Label}"/>
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="When UBOAT starts, Flotilla tells Windows to give it high priority, so it gets CPU time ahead of other programs. Helps when things like a browser, Discord or downloads run alongside it, but won't raise your frame rate on its own. On a weaker PC, other apps such as voice chat can stutter while the game is busy. It ends when UBOAT closes."/>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource Rule}"/>
+                    <DockPanel Style="{StaticResource Option}">
+                        <ToggleButton DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,2,0,0"
+                                      IsChecked="{Binding Settings.QuietWhilePlaying}" Click="OnChanged" AutomationProperties.Name="Keep Flotilla quiet while UBOAT runs"/>
+                        <StackPanel>
+                            <TextBlock Text="Keep Flotilla quiet while UBOAT runs" Style="{StaticResource Label}"/>
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="Pauses Flotilla's own background work while you play: the featured list, update checks, looking up what mods need, and its animations. It still watches for UBOAT closing so it can check the log."/>
                         </StackPanel>
                     </DockPanel>
                 </StackPanel>
@@ -75,6 +83,16 @@
             <TextBlock Text="{Binding Source='Mods', Converter={StaticResource Upper}}" Style="{StaticResource Section}"/>
             <Border Style="{StaticResource Panel}">
                 <StackPanel>
+                    <DockPanel Style="{StaticResource Option}">
+                        <ToggleButton DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,2,0,0"
+                                      IsChecked="{Binding Settings.SyncSteamOrder}" Click="OnChanged" AutomationProperties.Name="Keep Steam's load order the same as Flotilla's"/>
+                        <StackPanel>
+                            <TextBlock Text="Keep Steam's load order the same as Flotilla's" Style="{StaticResource Label}"/>
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="Writes the order and on or off state of mods you subscribed to in Steam into Steam's own list, so the game sees the same setup either way. If Steam was already open when that list changed, Play UBOAT restarts Steam first so it picks the new order up."/>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource Rule}"/>
                     <DockPanel Style="{StaticResource Option}">
                         <ToggleButton DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,2,0,0"
                                       IsChecked="{Binding Settings.InstallRequirements}" Click="OnChanged" AutomationProperties.Name="Install the mods a mod needs"/>
@@ -160,6 +178,16 @@
                                 <Button x:Name="ResetFolder" Style="{StaticResource GhostButton}" Height="32" Padding="14,0" FontSize="13" Margin="10,0,0,0"
                                         Content="Use the usual folder" Click="OnResetFolder"/>
                             </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource Rule}"/>
+                    <DockPanel Style="{StaticResource Option}">
+                        <StackPanel>
+                            <TextBlock Text="Update backups" Style="{StaticResource Label}"/>
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="Before updating a mod, Flotilla keeps a copy of the old version so Roll back can put it back. Deleting them frees the space, but those mods can't be rolled back any more."/>
+                            <Button x:Name="DeleteBackups" Style="{StaticResource GhostButton}" Height="32" Padding="14,0" FontSize="13" Margin="0,12,0,0"
+                                    HorizontalAlignment="Left" Click="OnDeleteBackups" Content="Delete backups"/>
                         </StackPanel>
                     </DockPanel>
                     <Border Style="{StaticResource Rule}"/>

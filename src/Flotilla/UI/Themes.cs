@@ -15,7 +15,8 @@ public static class Themes
 
     public static void Apply(Application app, string? name)
     {
-        Current = name == Logbook ? Logbook : Sonar;
+        // shortcut: Logbook is hidden for now, so everyone gets Sonar. To bring it back, use `name == Logbook ? Logbook : Sonar` and restore the Theme choice in Settings.
+        Current = Sonar;
         foreach (var part in new[] { Current, "Icons", "Controls" })
             app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri($"pack://application:,,,/Theme/{part}.xaml") });
     }

@@ -87,7 +87,7 @@ public partial class MainWindow : Window
         new("IconGear", "Make it yours in Settings",
             "Settings holds the switches for everything Flotilla does in the background.",
             [
-                "Clear UBOAT's cache before playing, so leftovers from old mods can't cause trouble.",
+                "Clear UBOAT's cache when your mods change, so leftovers from old mods can't cause trouble and unchanged setups load faster.",
                 "Install the mods a mod needs, warn about mods made for another UBOAT version, and check the game log after you play.",
                 "Count me as a sailor, error reports and update checks can each be turned off. Export and Import a mod list file live under the ... button on Installed.",
             ], Page: "settings"),
@@ -134,6 +134,7 @@ public partial class MainWindow : Window
         InstalledPage.OpenRequested += Open;
         InstalledPage.HistoryRequested += () => Reveal(HistoryLayer, true);
         InstalledPage.FindBrokenRequested += () => _ = FindBrokenAsync();
+        InstalledPage.BisectAnswered += stillBroken => _ = AnswerBisectAsync(stillBroken);
         InstalledPage.BestOrderRequested += () => _ = ShowBestOrderAsync();
         InstalledPage.ShareRequested += () => _ = ShareAsync(library.CurrentSetup(), "your setup");
         InstalledPage.UseCodeRequested += () => _ = UseCodeAsync(null);
@@ -144,9 +145,9 @@ public partial class MainWindow : Window
         SettingsPage.TourRequested += () => ShowTour(0);
         SettingsPage.UpdateCheckRequested += () => _ = CheckForUpdateAsync(manual: true);
         SettingsPage.RestartRequested += OfferRestart;
-        SettingsPage.ThemeChanged += () => _ = RestartAsync();
         SettingsPage.CountMeChanged += () => _ = RecountAsync();
         library.PropertyChanged += OnLibraryChanged;
+        Library.RestingChanged += OnRestingChanged;
         library.ProblemsFound += alert =>
         {
             problems = alert;
@@ -590,6 +591,15 @@ public partial class MainWindow : Window
         plan = null;
     }
 
+    async Task AnswerBisectAsync(bool stillBroken)
+    {
+        if (library.BisectUnplayed && await Ask("You haven't played this test yet",
+                "Flotilla hasn't seen UBOAT start since it set up this test. Answering without playing it can point the search at the wrong mod.",
+                "Answer anyway", cancel: "Not yet") is null)
+            return;
+        library.AnswerBisect(stillBroken);
+    }
+
     async Task FindBrokenAsync()
     {
         if (library.IsBisecting) return;
@@ -606,7 +616,7 @@ public partial class MainWindow : Window
         var answer = await Ask("Find a broken mod (beta)",
             $"If something's wrong in UBOAT and the log doesn't say which mod did it, Flotilla can find it in about {rounds} {(rounds == 1 ? "test" : "tests")} with your {on} mods.\n\n"
             + "Each test switches half of the suspects off. You play, check whether the problem still happens, and tell Flotilla. "
-            + "Mods another mod needs stay on together. Your setup is saved first, and Stop puts everything back the way it was.\n\n"
+            + "Mods another mod needs, and patches with the mod they patch, stay on together, so nothing is tested half-installed. Your setup is saved first, and Stop puts everything back the way it was.\n\n"
             + "This is still in beta. If it points at the wrong mod, tell me so I can improve it.",
             "Start", cancel: "Not now");
         if (answer is not null && library.StartBisect()) InstalledTab.IsChecked = true;
@@ -806,10 +816,32 @@ public partial class MainWindow : Window
     {
         if (count is not > 0) return;
 
-        DownloadsIcon.Data = (Geometry)FindResource("IconUsers");
-        DownloadsText.Text = count == 1 ? "Flotilla is assisting 1 sailor" : $"Flotilla is assisting {count:N0} sailors";
-        Downloads.ToolTip = "People with Flotilla open right now. You can stop being counted in Settings.";
+        awake = ((Geometry)FindResource("IconUsers"), count == 1 ? "Flotilla is assisting 1 sailor" : $"Flotilla is assisting {count:N0} sailors",
+            "People with Flotilla open right now. You can stop being counted in Settings.");
+        if (!Library.Resting) ShowTopBar(awake.Value);
+    }
+
+    // What the top bar shows when UBOAT isn't running, kept aside while Flotilla rests.
+    (Geometry Icon, string Text, object Tip)? awake;
+
+    void ShowTopBar((Geometry Icon, string Text, object Tip) shown)
+    {
+        DownloadsIcon.Data = shown.Icon;
+        DownloadsText.Text = shown.Text;
+        Downloads.ToolTip = shown.Tip;
         Downloads.Visibility = Visibility.Visible;
+    }
+
+    void OnRestingChanged()
+    {
+        if (Library.Resting)
+        {
+            if (Downloads.Visibility == Visibility.Visible) awake ??= (DownloadsIcon.Data, DownloadsText.Text, Downloads.ToolTip);
+            ShowTopBar(((Geometry)FindResource("IconSonar"), "Flotilla is resting while you play",
+                "Flotilla pauses its own background work while UBOAT runs. Change this in Settings."));
+        }
+        else if (awake is { } shown) ShowTopBar(shown);
+        else Downloads.Visibility = Visibility.Collapsed;
     }
 
     void SayGoodbye()
@@ -824,11 +856,11 @@ public partial class MainWindow : Window
 
     async Task WatchForUpdatesAsync()
     {
-        Updater.CleanUp();
+        _ = Updater.CleanUpAsync();
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         do
         {
-            if (settings.CheckForUpdates) await CheckForUpdateAsync();
+            if (settings.CheckForUpdates && !Library.Resting) await CheckForUpdateAsync();
         } while (await timer.WaitForNextTickAsync());
     }
 
@@ -849,7 +881,7 @@ public partial class MainWindow : Window
 
         if (found is null)
         {
-            Updater.CleanUp(download: true);
+            Updater.CleanUpDownload();
             if (manual) library.Status.Say($"You have the latest Flotilla, {Updater.Current}.");
             return;
         }

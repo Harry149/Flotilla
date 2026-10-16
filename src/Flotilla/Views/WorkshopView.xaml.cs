@@ -68,7 +68,7 @@ public partial class WorkshopView : UserControl
         InitializeComponent();
         rotate.Tick += (_, _) =>
         {
-            if (hero is { Paused: false }) hero.Next();
+            if (hero is { Paused: false } && !Library.Resting) hero.Next();
         };
         rotate.Start();
         DataContextChanged += (_, e) =>

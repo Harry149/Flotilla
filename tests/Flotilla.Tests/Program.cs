@@ -124,6 +124,28 @@ Check(log.Report(new Dictionary<string, string> { ["nosedown"] = "Nose Down" }, 
 Check(GameLog.Supports(["2026.1"], "2026.1 Patch 21") && GameLog.Supports(["2026.1 patch 18", "2026.1 Patch 21"], "2026.1 Patch 21"), "a mod for this release or this exact patch is fine");
 Check(!GameLog.Supports(["2024.1 (Full Release)"], "2026.1 Patch 21") && !GameLog.Supports(["2026.1 Patch 15"], "2026.1 Patch 21"), "a mod only for another release or patch is flagged");
 Check(GameLog.Supports([], "2026.1 Patch 21"), "a mod that names no version isn't flagged");
+{
+    string[] repeated = [
+        "NullReferenceException: Object reference not set to an instance of an object",
+        "  at ShadowZone.ThermalLayer.Update () [0x00012] in <abc>:0",
+        "NullReferenceException: Object reference not set to an instance of an object",
+        "  at ShadowZone.ThermalLayer.Update () [0x00012] in <abc>:0",
+        "NullReferenceException: Object reference not set to an instance of an object",
+        "  at ShadowZone.ThermalLayer.Update () [0x00012] in <abc>:0",
+        "FileNotFoundException: Could not load file or assembly 'SonarKit, Version=1.0.0.0, Culture=neutral' or one of its dependencies.",
+        "  at BetterSonar.Loader.OnLoaded () [0x00001] in <def>:0",
+        @"C:\Users\x\AppData\LocalLow\Deep Water Studio\UBOAT\Mods\OldCrew\Source\Crew.cs(12,5): error CS1061: 'Crew' does not contain a definition for 'Morale'",
+        "MissingMethodException: Method not found: void UBOAT.Game.Scene.Characters.Crew.Rest()",
+        "  at BetterSonar.Loader.Tick () [0x00001] in <def>:0",
+    ];
+    var prints = new ModFingerprints(new() { ["ShadowZone"] = "zone", ["BetterSonar"] = "sonar", ["SonarKit"] = "kit" }, []);
+    var counted = GameLog.Parse(repeated, prints);
+    Check(counted.Errors("zone").Single().Count == 3, "a repeated error is counted, not listed again");
+    var load = counted.Errors("sonar").First(p => p.Missing is not null);
+    Check(load.Missing == "SonarKit" && prints.ForAssembly("SonarKit") == "kit", "a missing assembly is named, and the mod that provides it can be found");
+    Check(counted.Errors("OldCrew").Single().Outdated && counted.Errors("sonar").Single(p => p.Missing is null).Outdated, "errors from parts of the game that changed mark a mod as likely out of date");
+    Check(!counted.Errors("zone").Single().Outdated, "an ordinary error isn't called out of date");
+}
 Check(GameLog.SplitTitle("[2024.1] Enhanced Identification Book") == ("Enhanced Identification Book", "2024.1")
     && GameLog.SplitTitle("[2026.1 Patch 21] Nose Down") == ("Nose Down", "2026.1"), "a game version at the start of a title is split off");
 Check(GameLog.SplitTitle("Uboats: Coop Multiplayer") == ("Uboats: Coop Multiplayer", null)
@@ -150,6 +172,17 @@ Console.WriteLine("History, bisect and share codes");
 PackEntry Entry(string key, ulong manifest = 0) => new(key, manifest, key.ToUpperInvariant());
 var then = new List<PackEntry> { Entry("a", 1), Entry("b"), Entry("c") };
 Check(History.Compare(then, [Entry("a", 1), Entry("b"), Entry("c")]).Same, "the same setup is the same");
+// A mod both subscribed in Steam and downloaded by Flotilla, with both copies on, is listed twice.
+bool twiceIsOnce;
+try
+{
+    twiceIsOnce = History.Compare([Entry("a", 1), Entry("a", 1), Entry("b")], [Entry("a", 1), Entry("b"), Entry("b")]).Same;
+}
+catch (ArgumentException)
+{
+    twiceIsOnce = false;
+}
+Check(twiceIsOnce, "a mod listed twice is counted once");
 var difference = History.Compare(then, [Entry("c"), Entry("a", 2), Entry("d")]);
 Check(difference is { Added: ["D"], Removed: ["B"], Versions: ["A"], Reordered: true } && difference.Describe() == "1 more on, 1 fewer on, 1 at another version, a different order", "a changed setup is described");
 var snapshots = new List<Snapshot>();
@@ -165,13 +198,30 @@ var setup = Enumerable.Range(1, 8).Select(i => Entry($"m{i}")).ToList();
 IEnumerable<string> Needs(string key) => key == "m2" ? ["m8"] : [];
 var bisect = Bisect.Start(setup, [.. setup.Select(m => m.Key)], Needs);
 Check(bisect.Testing.SequenceEqual(["m1", "m2", "m3", "m4", "m8"]) && bisect.RoundsLeft == 3, "the first round tests half the mods, plus anything they need");
-Check(bisect.EnabledNow().SequenceEqual(["m1", "m2", "m3", "m4", "m8"]), "only the half being tested is switched on");
+Check(bisect.EnabledNow(Needs).SequenceEqual(["m1", "m2", "m3", "m4", "m8"]), "only the half being tested is switched on");
+Check(!bisect.Played && bisect.Previous is null, "a new test hasn't been played and has nothing to undo");
 bisect = bisect.Answer(stillBroken: false, Needs);
 Check(bisect.Suspects.SequenceEqual(["m5", "m6", "m7"]), "a test that works clears the mods that were on");
 bisect = bisect.Answer(stillBroken: true, Needs);
 Check(bisect.Suspects.SequenceEqual(["m5", "m6"]), "a test that's still broken keeps the mods that were on");
 bisect = bisect.Answer(stillBroken: true, Needs);
 Check(bisect.Culprit == "m5" && bisect.Round == 4, "the search ends on a single mod");
+Check(bisect.Previous?.Suspects.SequenceEqual(["m5", "m6"]) == true && bisect.Previous.Previous?.Suspects.SequenceEqual(["m5", "m6", "m7"]) == true, "each answer can be undone, one test at a time");
+{
+    // p patches b, and q needs p. Every test must keep them together, so a patch is never tested without its base.
+    var packed = new[] { "b", "x", "p", "y", "q" }.Select(k => Entry(k)).ToList();
+    IEnumerable<string> PatchNeeds(string key) => key switch { "p" => ["b"], "q" => ["p"], _ => [] };
+    var search = Bisect.Start(packed, [.. packed.Select(m => m.Key)], PatchNeeds);
+    Check(search.Testing.SequenceEqual(["b", "x", "p"]), "a test brings in what its mods need");
+    var cleared = search.Answer(stillBroken: false, PatchNeeds);
+    Check(cleared.Suspects.SequenceEqual(["y", "q"]) && cleared.Testing.SequenceEqual(["y"]), "a test that works clears its mods, the patch included");
+    var chained = Bisect.Start(packed, ["q", "y"], PatchNeeds);
+    Check(chained.Testing.SequenceEqual(["q", "p", "b"]), "needs are followed through, so a mod's needs bring in their own needs");
+    var narrowed = new Bisect(packed, ["b", "y"], ["y"], 3);
+    Check(narrowed.EnabledNow(PatchNeeds).SequenceEqual(["x", "y"]), "a cleared patch is switched off while the mod it patches is off");
+    var culpritFound = new Bisect(packed, ["b"], ["b"], 4);
+    Check(culpritFound.EnabledNow(PatchNeeds).SequenceEqual(["x", "y"]) && culpritFound.WithoutCulprit(PatchNeeds).SequenceEqual(["x", "y"]), "checking a culprit also switches off the patches that need it");
+}
 Check(ShareCodes.Normalise("flt-8k2qrt") == "8K2QRT" && ShareCodes.Normalise("FLT-8K2QR7") == "8K2QR7" && ShareCodes.Display("8K2QR7") == "FLT-8K2QR7", "share codes ignore case and the FLT- prefix");
 Check(ShareCodes.Normalise("flotilla://setup/8K2QR7") == "8K2QR7" && ShareCodes.Normalise("8K2-QR7") == "8K2QR7", "a link or a code with a dash works too");
 Check(ShareCodes.Normalise("OOOOOO") is null && ShareCodes.Normalise("8K2Q") is null, "look-alike letters and short codes are refused");
@@ -188,6 +238,16 @@ Check(Updater.IsNewer("0.1.3", "0.1.2") && Updater.IsNewer("0.2", "0.1.9") && Up
 Check(Updater.IsNewer("0.1.1b", "0.1.1") && Updater.IsNewer("0.1.2", "0.1.1b") && !Updater.IsNewer("0.1.1b", "0.1.2"), "a lettered hotfix sits between versions");
 Check(!Updater.IsNewer("0.1.2", "0.1.2") && !Updater.IsNewer("0.1.1", "0.1.2") && !Updater.IsNewer("0.1.10", "0.1.10"), "the same or an older version isn't newer");
 Check(Updater.IsNewer("0.1.10", "0.1.9"), "versions compare as numbers, not text");
+{
+    var old = Path.Combine(temp, "Flotilla.exe.old");
+    File.WriteAllText(old, "old exe");
+    var held = new FileStream(old, FileMode.Open, FileAccess.Read, FileShare.None);
+    Check(!await Updater.DeleteWhenFreeAsync(old, TimeSpan.FromMilliseconds(20), 3) && File.Exists(old), "a file still in use is left after the last try");
+    var deleting = Updater.DeleteWhenFreeAsync(old, TimeSpan.FromMilliseconds(50), 30);
+    await Task.Delay(300);
+    held.Dispose();
+    Check(await deleting && !File.Exists(old), "the old exe is deleted once the old copy lets go of it");
+}
 Check(Updater.VersionIn("V0.1.2") == "0.1.2" && Updater.VersionIn("v0.1.1b") == "0.1.1b" && Updater.VersionIn("Flotilla 1.4 beta") == "1.4" && Updater.VersionIn("V012") is null, "the version in a release name");
 var release = Updater.Parse("""
     {"tag_name":"V013","name":"V0.1.3","draft":false,"prerelease":false,"html_url":"https://github.com/Harry149/Flotilla/releases/tag/V013",
@@ -467,6 +527,30 @@ if (OperatingSystem.IsWindows())
     File.WriteAllText(Path.Combine(content, "probe.txt"), "x");
     Check(File.Exists(Path.Combine(secondMods, "probe.txt")) && !File.Exists(Path.Combine(firstMods, "probe.txt")), "downloads follow a new UBOAT data folder");
     Directory.Delete(content);
+}
+
+Console.WriteLine("Cache stamp");
+{
+    var a = Directory.CreateDirectory(Path.Combine(temp, "stamp", "a")).FullName;
+    var b = Directory.CreateDirectory(Path.Combine(temp, "stamp", "b", "Data Sheets")).FullName;
+    File.WriteAllText(Path.Combine(a, "Manifest.json"), "{}");
+    File.WriteAllText(Path.Combine(b, "Items.xlsx"), "x");
+    (string, string?)[] stamped = [("a", a), ("b", Path.GetDirectoryName(b))];
+    var stamp = CacheStamp.Of(stamped, "2026.1 Patch 21");
+    Check(CacheStamp.Of(stamped, "2026.1 Patch 21") == stamp, "the same mods give the same stamp");
+    Check(CacheStamp.Of([stamped[1], stamped[0]], "2026.1 Patch 21") != stamp, "a new load order changes the stamp");
+    Check(CacheStamp.Of([stamped[0]], "2026.1 Patch 21") != stamp, "switching a mod off changes the stamp");
+    Check(CacheStamp.Of(stamped, "2026.1 Patch 22") != stamp, "a game update changes the stamp");
+    File.SetLastWriteTimeUtc(Path.Combine(b, "Items.xlsx"), DateTime.UtcNow.AddMinutes(5));
+    Check(CacheStamp.Of(stamped, "2026.1 Patch 21") != stamp, "an edited file deep in a mod changes the stamp");
+}
+
+Console.WriteLine("Patches");
+{
+    (string, string)[] described = [("Shadow Zone", ""), ("Shadow Zone Patch", ""), ("Nose Down", ""), ("Compat Fix", "Makes Nose Down and Depth Charge Guesswork work together."), ("Depth Charge Guesswork", "")];
+    Check(LoadOrder.Bases(described, 1).SequenceEqual([0]), "a mod named after another is a patch for it");
+    Check(LoadOrder.Bases(described, 3).SequenceEqual([2, 4]), "a patch-named mod is a patch for the mods its description names");
+    Check(!LoadOrder.Bases(described, 0).Any() && !LoadOrder.Bases(described, 2).Any(), "ordinary mods aren't patches");
 }
 
 Console.WriteLine("Rolling back");

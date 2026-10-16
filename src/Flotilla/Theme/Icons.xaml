@@ -29,6 +29,8 @@
     <Geometry x:Key="IconGear">M15,12 A3,3 0 1 1 9,12 A3,3 0 1 1 15,12 Z M12,2.5 V5 M12,19 V21.5 M2.5,12 H5 M19,12 H21.5 M5.3,5.3 L7.1,7.1 M16.9,16.9 L18.7,18.7 M5.3,18.7 L7.1,16.9 M16.9,7.1 L18.7,5.3</Geometry>
     <Geometry x:Key="IconLog">M6,3 H14 L19,8 V21 H6 Z M14,3 V8 H19 M9,12 H16 M9,15.5 H16 M9,19 H13</Geometry>
     <Geometry x:Key="IconHeart">M12,20 C12,20 3.5,14.6 3.5,8.9 C3.5,6.2 5.6,4.2 8.1,4.2 C9.7,4.2 11.1,5 12,6.3 C12.9,5 14.3,4.2 15.9,4.2 C18.4,4.2 20.5,6.2 20.5,8.9 C20.5,14.6 12,20 12,20 Z</Geometry>
+    <Geometry x:Key="IconMegaphone">M4,9.5 L4,14.5 L7.5,14.5 L15,18.5 L15,5.5 L7.5,9.5 Z M7.5,14.5 L9,20 M18,9.5 C19.3,10.5 19.3,13.5 18,14.5</Geometry>
+    <Geometry x:Key="IconCoffee">M5,9 L16,9 L16,15 C16,17.8 13.8,20 11,20 L10,20 C7.2,20 5,17.8 5,15 Z M16,10.5 L17.5,10.5 C19,10.5 20,11.5 20,13 C20,14.5 19,15.5 17.5,15.5 L16,15.5 M8.5,3.5 L8.5,6 M12,3.5 L12,6</Geometry>
     <Geometry x:Key="IconCode">M8.5,7 L3.5,12 L8.5,17 M15.5,7 L20.5,12 L15.5,17 M13.5,4.5 L10.5,19.5</Geometry>
     <Geometry x:Key="IconMinimize">M0,5.5 L10,5.5</Geometry>
     <Geometry x:Key="IconMaximize">M0.5,0.5 H9.5 V9.5 H0.5 Z</Geometry>

@@ -88,9 +88,13 @@ public partial class InstalledView : UserControl
 
     void OnBisectPlay(object sender, RoutedEventArgs e) => Library.PlayGame();
 
-    void OnStillBroken(object sender, RoutedEventArgs e) => Library.AnswerBisect(stillBroken: true);
+    public event Action<bool>? BisectAnswered;
 
-    void OnFixed(object sender, RoutedEventArgs e) => Library.AnswerBisect(stillBroken: false);
+    void OnStillBroken(object sender, RoutedEventArgs e) => BisectAnswered?.Invoke(true);
+
+    void OnFixed(object sender, RoutedEventArgs e) => BisectAnswered?.Invoke(false);
+
+    void OnUndoBisect(object sender, RoutedEventArgs e) => Library.UndoBisect();
 
     void OnKeepOff(object sender, RoutedEventArgs e) => Library.StopBisect(turnOffCulprit: true);
 

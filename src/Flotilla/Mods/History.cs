@@ -60,6 +60,9 @@ public static class History
     public static SetupDifference Compare(IReadOnlyList<PackEntry> from, IReadOnlyList<PackEntry> to)
     {
         var keys = StringComparer.OrdinalIgnoreCase;
+        // A mod subscribed in Steam and also downloaded by Flotilla, with both copies on, is listed twice.
+        from = [.. from.DistinctBy(m => m.Key, keys)];
+        to = [.. to.DistinctBy(m => m.Key, keys)];
         var before = from.ToDictionary(m => m.Key, keys);
         var after = to.ToDictionary(m => m.Key, keys);
 
@@ -74,7 +77,8 @@ public static class History
     }
 }
 
-public sealed record Bisect(IReadOnlyList<PackEntry> Original, IReadOnlyList<string> Suspects, IReadOnlyList<string> Testing, int Round)
+// Played: UBOAT has run since this test was set up. Previous: the test before the last answer, so a wrong answer can be undone.
+public sealed record Bisect(IReadOnlyList<PackEntry> Original, IReadOnlyList<string> Suspects, IReadOnlyList<string> Testing, int Round, bool Played = false, Bisect? Previous = null)
 {
     public static Bisect Start(IReadOnlyList<PackEntry> original, IReadOnlyList<string> suspects, Func<string, IEnumerable<string>> needs) =>
         Next(original, suspects, 1, needs);
@@ -87,14 +91,40 @@ public sealed record Bisect(IReadOnlyList<PackEntry> Original, IReadOnlyList<str
     {
         var tested = new HashSet<string>(Testing, StringComparer.OrdinalIgnoreCase);
         var left = Suspects.Where(s => tested.Contains(s) == stillBroken).ToList();
-        return Next(Original, left.Count == 0 ? Suspects : left, Round + 1, needs);
+        return Next(Original, left.Count == 0 ? Suspects : left, Round + 1, needs) with { Previous = this };
     }
 
-    public IEnumerable<string> EnabledNow()
+    // The mods on for this test. Once a culprit is found, that's everything else, to check the problem has gone.
+    public IEnumerable<string> EnabledNow(Func<string, IEnumerable<string>> needs)
     {
         var suspects = new HashSet<string>(Suspects, StringComparer.OrdinalIgnoreCase);
         var testing = new HashSet<string>(Testing, StringComparer.OrdinalIgnoreCase);
-        return Original.Select(m => m.Key).Where(k => !suspects.Contains(k) || testing.Contains(k));
+        return Culprit is not null
+            ? WithoutCulprit(needs)
+            : Closed(Original.Select(m => m.Key).Where(k => !suspects.Contains(k) || testing.Contains(k)), needs);
+    }
+
+    public IEnumerable<string> WithoutCulprit(Func<string, IEnumerable<string>> needs) =>
+        Closed(Original.Select(m => m.Key).Where(k => !k.Equals(Culprit, StringComparison.OrdinalIgnoreCase)), needs);
+
+    // A mod is never left on without a mod it needs or patches, because on its own it would throw errors and look broken.
+    IEnumerable<string> Closed(IEnumerable<string> wanted, Func<string, IEnumerable<string>> needs)
+    {
+        var keys = new HashSet<string>(Original.Select(m => m.Key), StringComparer.OrdinalIgnoreCase);
+        var on = new HashSet<string>(wanted, StringComparer.OrdinalIgnoreCase);
+
+        bool changed;
+        do
+        {
+            changed = false;
+            foreach (var key in on.ToList())
+            {
+                if (!needs(key).Any(need => keys.Contains(need) && !on.Contains(need))) continue;
+                on.Remove(key);
+                changed = true;
+            }
+        } while (changed);
+        return Original.Select(m => m.Key).Where(on.Contains);
     }
 
     static Bisect Next(IReadOnlyList<PackEntry> original, IReadOnlyList<string> suspects, int round, Func<string, IEnumerable<string>> needs)
@@ -103,8 +133,9 @@ public sealed record Bisect(IReadOnlyList<PackEntry> Original, IReadOnlyList<str
 
         var half = suspects.Take((suspects.Count + 1) / 2).ToList();
         var testing = new List<string>(half);
-        foreach (var key in half)
-            foreach (var need in needs(key))
+        // What the half needs goes on too, and what those need, so nothing in the test runs without its parts.
+        for (var i = 0; i < testing.Count; i++)
+            foreach (var need in needs(testing[i]))
                 if (!testing.Contains(need, StringComparer.OrdinalIgnoreCase) && original.Any(m => m.Key.Equals(need, StringComparison.OrdinalIgnoreCase)))
                     testing.Add(need);
         return new Bisect(original, suspects, testing, round);

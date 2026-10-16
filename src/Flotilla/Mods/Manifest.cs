@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Flotilla.Mods;
 
-public sealed record Manifest(string Name, string Version, IReadOnlyList<string> GameVersions, ulong SteamId, string Description = "")
+public sealed record Manifest(string Name, string Version, IReadOnlyList<string> GameVersions, ulong SteamId, string Description = "", string AssemblyName = "")
 {
     static readonly JsonDocumentOptions Lenient = new() { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip };
 
@@ -21,7 +21,8 @@ public sealed record Manifest(string Name, string Version, IReadOnlyList<string>
                 root.Text("version").Trim(),
                 GameVersionsOf(root),
                 (ulong)Math.Max(0, root.Number("steamFileId")),
-                root.Text("description").Trim());
+                root.Text("description").Trim(),
+                root.Text("assemblyName").Trim());
         }
         catch (Exception e) when (e is JsonException or IOException or InvalidOperationException)
         {

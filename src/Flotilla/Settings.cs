@@ -15,6 +15,14 @@ public sealed class Settings
     public bool Maximized { get; set; }
 
     public bool ClearCacheBeforePlay { get; set; } = true;
+    public bool PrioritiseGame { get; set; }
+    public bool QuietWhilePlaying { get; set; } = true;
+    public bool SyncSteamOrder { get; set; } = true;
+    public int ModsInstalled { get; set; }
+    public int UpdatesApplied { get; set; }
+    public int GamesLaunched { get; set; }
+    public int ErrorsCaught { get; set; }
+    public string? CacheStamp { get; set; }
     public bool CheckForUpdates { get; set; } = true;
     public bool InstallRequirements { get; set; } = true;
     public bool WarnGameVersion { get; set; } = true;

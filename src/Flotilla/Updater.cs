@@ -53,13 +53,20 @@ public sealed class Updater(HttpClient http)
         return update.Sha256 is { } hash && await IsRunningAsync(hash) ? null : update;
     }
 
+    static string? ownHash;
+
+    // The running exe never changes, so it's hashed once rather than on every check.
     static async Task<bool> IsRunningAsync(string sha256)
     {
         if (!CanReplaceItself) return false;
         try
         {
-            await using var file = new FileStream(Environment.ProcessPath!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            return Convert.ToHexString(await SHA256.HashDataAsync(file)).Equals(sha256, StringComparison.OrdinalIgnoreCase);
+            if (ownHash is null)
+            {
+                await using var file = new FileStream(Environment.ProcessPath!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                ownHash = Convert.ToHexString(await SHA256.HashDataAsync(file));
+            }
+            return ownHash.Equals(sha256, StringComparison.OrdinalIgnoreCase);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -201,13 +208,34 @@ public sealed class Updater(HttpClient http)
         return Process.Start(new ProcessStartInfo(current, arguments) { UseShellExecute = true });
     }
 
-    public static void CleanUp(bool download = false)
+    // Right after an update the old copy is still closing, and Windows won't delete a running exe, so keep trying for a while.
+    public static Task CleanUpAsync() =>
+        Environment.ProcessPath is { } path ? DeleteWhenFreeAsync(path + ".old", TimeSpan.FromSeconds(1), 30) : Task.CompletedTask;
+
+    public static async Task<bool> DeleteWhenFreeAsync(string path, TimeSpan wait, int tries)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+                return true;
+            }
+            catch (Exception e) when ((e is IOException or UnauthorizedAccessException) && attempt < tries) { }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+            await Task.Delay(wait);
+        }
+    }
+
+    public static void CleanUpDownload()
     {
         if (Environment.ProcessPath is not { } path) return;
         try
         {
-            var leftover = path + (download ? ".new" : ".old");
-            if (File.Exists(leftover)) File.Delete(leftover);
+            if (File.Exists(path + ".new")) File.Delete(path + ".new");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }

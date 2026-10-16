@@ -15,8 +15,6 @@ public partial class SettingsView : UserControl
         {
             if (!IsVisible || DataContext is not Library library) return;
 
-            SonarTheme.IsChecked = Themes.Current == Themes.Sonar;
-            LogbookTheme.IsChecked = Themes.Current == Themes.Logbook;
             VersionText.Text = $"You have Flotilla {Updater.Current}. New versions come from GitHub, and Flotilla asks before installing one.";
             FolderText.Text = library.Settings.DataFolder is { Length: > 0 } custom
                 ? $"{custom}{(custom == Paths.Game ? "" : " (used after Flotilla restarts)")}"
@@ -26,22 +24,25 @@ public partial class SettingsView : UserControl
             ClearNow.Content = "Clear now";
             var size = await Task.Run(library.CacheSize);
             ClearNow.Content = size > 0 ? $"Clear now ({size / (1024.0 * 1024):0} MB)" : "Clear now (empty)";
+            ShowBackupSize(await Task.Run(library.BackupSize));
         };
+    }
+
+    void ShowBackupSize(long size)
+    {
+        DeleteBackups.Content = size > 0 ? $"Delete backups ({size / (1024.0 * 1024):0} MB)" : "Delete backups (none)";
+        DeleteBackups.IsEnabled = size > 0;
+    }
+
+    void OnDeleteBackups(object sender, RoutedEventArgs e)
+    {
+        if (Library.DeleteBackups()) ShowBackupSize(0);
     }
 
     public event Action? TourRequested;
     public event Action? UpdateCheckRequested;
     public event Action? RestartRequested;
     public event Action? CountMeChanged;
-    public event Action? ThemeChanged;
-
-    void OnTheme(object sender, RoutedEventArgs e)
-    {
-        if (sender is not RadioButton { Tag: string theme } || theme == Themes.Current) return;
-        Library.Settings.Theme = theme;
-        Library.Settings.Save();
-        ThemeChanged?.Invoke();
-    }
 
     Library Library => (Library)DataContext;
 

@@ -14,6 +14,9 @@ public sealed record SharedCode(string Code, DateTime? Expires);
 
 public sealed class Community(HttpClient http)
 {
+    // The Worker refuses anything bigger, so Flotilla checks first and can say why.
+    public const int MaxShare = 256 * 1024;
+
     static string Api => Sailors.Api;
 
     public async Task<SharedCode?> ShareAsync(string installId, string setup, int hours)

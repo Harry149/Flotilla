@@ -40,6 +40,7 @@ public sealed class ModFingerprints
         {
             Note(tags, Squash(Release.Replace(name, "")), key);
             if (folder is null || !Directory.Exists(folder)) continue;
+            if (Manifest.Read(folder)?.AssemblyName is { Length: > 0 } assembly) Note(namespaces, assembly, key);
 
             try
             {
@@ -79,6 +80,9 @@ public sealed class ModFingerprints
     }
 
     public string? ForTag(string tag) => tags.GetValueOrDefault(Squash(tag));
+
+    // The mod whose DLL, or the assembly the game compiles its source into, has exactly this name.
+    public string? ForAssembly(string name) => namespaces.GetValueOrDefault(name);
 
     static string Squash(string text) => new([.. text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
 }

@@ -29,6 +29,8 @@ public sealed class Sonar : Canvas
         IsHitTestVisible = false;
         SizeChanged += (_, _) => Draw();
         IsVisibleChanged += (_, _) => Animate();
+        Loaded += (_, _) => Library.RestingChanged += Animate;
+        Unloaded += (_, _) => Library.RestingChanged -= Animate;
     }
 
     public bool ShowContacts { get; set; } = true;
@@ -88,7 +90,7 @@ public sealed class Sonar : Canvas
 
     void Animate()
     {
-        var moving = IsVisible && SystemParameters.ClientAreaAnimation;
+        var moving = IsVisible && SystemParameters.ClientAreaAnimation && !Library.Resting;
 
         if (moving)
         {

@@ -5,7 +5,8 @@ namespace Flotilla.Mods;
 
 public enum Severity { Warning, Error }
 
-public sealed record LogProblem(Severity Severity, string Summary, IReadOnlyList<string> Lines);
+// Count is how many times the same problem showed up. Missing is an assembly it couldn't load. Outdated means it reached for a part of the game (or another mod) that isn't there.
+public sealed record LogProblem(Severity Severity, string Summary, IReadOnlyList<string> Lines, int Count = 1, string? Missing = null, bool Outdated = false);
 
 public sealed record GameLog(string? GameVersion, IReadOnlyDictionary<string, List<LogProblem>> ByMod, IReadOnlyList<LogProblem> Unattributed)
 {
@@ -23,6 +24,9 @@ public sealed record GameLog(string? GameVersion, IReadOnlyDictionary<string, Li
     static readonly Regex ErrorLevel = new(@"^(ERROR|FATAL|EXCEPTION|CRITICAL)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     static readonly Regex WarningLevel = new(@"^(WARN|WARNING)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     static readonly Regex ErrorWords = new(@"\bfatal\b|\w*Exception\b|\berror:|\bcould not load\b|\bfailed to (load|patch|apply|initiali[sz]e|compile)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    static readonly Regex MissingAssembly = new(@"could not load file or assembly '([^',]+)|could not load type '[^']*' from assembly '([^',]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    static readonly Regex Gone = new(@"MissingMethodException|MissingFieldException|MissingMemberException|TypeLoadException|EntryPointNotFoundException", RegexOptions.Compiled);
+    static readonly HashSet<string> GoneCompile = ["CS0103", "CS0117", "CS0122", "CS0234", "CS0246", "CS1061", "CS1501", "CS7036"];
     static readonly Regex Trouble = new(@"could not load (file or assembly|type)|TypeLoadException|MissingMethodException|MissingFieldException|ReflectionTypeLoadException|Patching exception|failed to (load|patch|apply)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public static GameLog Parse(IEnumerable<string> lines, ModFingerprints? mods = null)
@@ -36,7 +40,9 @@ public sealed record GameLog(string? GameVersion, IReadOnlyDictionary<string, Li
         void Add(string? key, LogProblem problem)
         {
             var list = key is null ? unattributed : byMod.TryGetValue(key, out var found) ? found : byMod[key] = [];
-            if (list.Count < (key is null ? 50 : PerMod) && list.All(p => p.Summary != problem.Summary)) list.Add(problem);
+            var same = list.FindIndex(p => p.Summary == problem.Summary);
+            if (same >= 0) list[same] = list[same] with { Count = list[same].Count + 1 };
+            else if (list.Count < (key is null ? 50 : PerMod)) list.Add(Classify(problem));
         }
 
         void Close()
@@ -70,7 +76,8 @@ public sealed record GameLog(string? GameVersion, IReadOnlyDictionary<string, Li
 
             if (Compile.Match(line) is { Success: true } compile)
             {
-                Add(PathOwner(line), new LogProblem(Severity.Error, $"it failed to compile ({compile.Groups[1].Value}: {compile.Groups[2].Value.Trim()})", [line]));
+                Add(PathOwner(line), new LogProblem(Severity.Error, $"it failed to compile ({compile.Groups[1].Value}: {compile.Groups[2].Value.Trim()})", [line],
+                    Outdated: GoneCompile.Contains(compile.Groups[1].Value)));
                 continue;
             }
 
@@ -100,6 +107,13 @@ public sealed record GameLog(string? GameVersion, IReadOnlyDictionary<string, Li
         return new GameLog(version, byMod, unattributed);
     }
 
+    static LogProblem Classify(LogProblem problem)
+    {
+        var first = problem.Lines[0];
+        var missing = MissingAssembly.Match(first) is { Success: true } match ? (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value).Trim() : null;
+        return problem with { Missing = missing ?? problem.Missing, Outdated = problem.Outdated || missing is null && Gone.IsMatch(first) };
+    }
+
     static string? PathOwner(string line) =>
         SteamMod.Match(line) is { Success: true } steam ? ModFolder.SteamPrefix + steam.Groups[1].Value
         : LocalMod.Match(line) is { Success: true } local ? local.Groups[1].Value
@@ -119,8 +133,9 @@ public sealed record GameLog(string? GameVersion, IReadOnlyDictionary<string, Li
         return line.Length <= 220 ? line : line[..220] + "…";
     }
 
+    // Most frequent first, since an error that repeats every frame does the most harm.
     public IEnumerable<LogProblem> Errors(string key) =>
-        ByMod.TryGetValue(key, out var problems) ? problems.Where(p => p.Severity == Severity.Error) : [];
+        ByMod.TryGetValue(key, out var problems) ? problems.Where(p => p.Severity == Severity.Error).OrderByDescending(p => p.Count) : [];
 
     public string Report(IReadOnlyDictionary<string, string> names, DateTime played)
     {
@@ -128,13 +143,13 @@ public sealed record GameLog(string? GameVersion, IReadOnlyDictionary<string, Li
         text.AppendLine($"Flotilla game log report, UBOAT {GameVersion ?? "version unknown"}, game closed {played.ToLocalTime():yyyy-MM-dd HH:mm}");
         text.AppendLine();
 
-        foreach (var (key, problems) in ByMod.OrderByDescending(m => m.Value.Count(p => p.Severity == Severity.Error)))
+        foreach (var (key, problems) in ByMod.OrderByDescending(m => m.Value.Where(p => p.Severity == Severity.Error).Sum(p => p.Count)))
         {
-            var errors = problems.Count(p => p.Severity == Severity.Error);
-            text.AppendLine($"== {names.GetValueOrDefault(key, key)} ({key}): {errors} errors, {problems.Count - errors} warnings");
-            foreach (var problem in problems)
+            var errors = problems.Where(p => p.Severity == Severity.Error).Sum(p => p.Count);
+            text.AppendLine($"== {names.GetValueOrDefault(key, key)} ({key}): {errors} errors, {problems.Where(p => p.Severity == Severity.Warning).Sum(p => p.Count)} warnings");
+            foreach (var problem in problems.OrderByDescending(p => p.Count))
             {
-                text.AppendLine($"[{problem.Severity}] {problem.Summary}");
+                text.AppendLine($"[{problem.Severity}] {problem.Summary}{(problem.Count > 1 ? $" (x{problem.Count:N0})" : "")}");
                 foreach (var line in problem.Lines.Skip(1)) text.AppendLine($"    {line.Trim()}");
             }
             text.AppendLine();
@@ -145,7 +160,7 @@ public sealed record GameLog(string? GameVersion, IReadOnlyDictionary<string, Li
             text.AppendLine($"== Not linked to a mod: {Unattributed.Count}");
             foreach (var problem in Unattributed)
             {
-                text.AppendLine($"[{problem.Severity}] {problem.Summary}");
+                text.AppendLine($"[{problem.Severity}] {problem.Summary}{(problem.Count > 1 ? $" (x{problem.Count:N0})" : "")}");
                 foreach (var line in problem.Lines.Skip(1)) text.AppendLine($"    {line.Trim()}");
             }
         }

@@ -30,6 +30,7 @@ public sealed class Library : Observable
     Bisect? bisect;
     Profile? installingFor;
     GameLog? lastLog;
+    ModFingerprints? lastPrints;
     DateTime lastLogTime;
     bool checkingLog;
     bool refreshing;
@@ -92,20 +93,73 @@ public sealed class Library : Observable
 
     public event Action<GameAlert>? ProblemsFound;
 
+    // True while UBOAT runs and Flotilla should hold back its own background work so the game gets the PC.
+    public static bool Resting { get; private set; }
+    public static event Action? RestingChanged;
+
     async Task WatchGameAsync()
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
         var wasRunning = GameIsRunning();
+        var wasPlaying = Prioritise();
         while (await timer.WaitForNextTickAsync())
         {
+            // The game itself, not just its launcher, has to start before a test counts as played.
+            var playing = Prioritise();
             var running = GameIsRunning();
-            if (wasRunning && !running && Settings.CheckGameLog)
+            if (playing && !wasPlaying && bisect is { Played: false } search)
+            {
+                bisect = search with { Played = true };
+                try
+                {
+                    bisect.Save(bisectFile);
+                }
+                catch (IOException) { }
+            }
+            var resting = running && Settings.QuietWhilePlaying;
+            if (resting != Resting)
+            {
+                Resting = resting;
+                RestingChanged?.Invoke();
+            }
+            if (wasRunning && !running && (Settings.CheckGameLog || bisect is not null))
             {
                 await Task.Delay(TimeSpan.FromSeconds(2));
                 await CheckGameLogAsync();
             }
             wasRunning = running;
+            wasPlaying = playing;
         }
+    }
+
+    int? boosted;
+
+    // Only puts back the priority Flotilla set itself, so a priority the player chose stays. Returns whether the game itself is running.
+    bool Prioritise()
+    {
+        var games = Process.GetProcessesByName("UBOAT");
+        if (games.Length == 0) boosted = null;
+        foreach (var game in games)
+        {
+            using (game)
+            {
+                try
+                {
+                    if (Settings.PrioritiseGame && game.Id != boosted)
+                    {
+                        game.PriorityClass = ProcessPriorityClass.High;
+                        boosted = game.Id;
+                    }
+                    else if (!Settings.PrioritiseGame && game.Id == boosted)
+                    {
+                        game.PriorityClass = ProcessPriorityClass.Normal;
+                        boosted = null;
+                    }
+                }
+                catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+            }
+        }
+        return games.Length > 0;
     }
 
     public async Task CheckGameLogAsync()
@@ -115,13 +169,18 @@ public sealed class Library : Observable
 
         checkingLog = true;
         GameLog log;
+        ModFingerprints prints;
         try
         {
             await ReadGameVersionAsync();
-            if (!Settings.CheckGameLog || GameIsRunning()) return;
+            if (!Settings.CheckGameLog && bisect is null || GameIsRunning()) return;
 
             var mods = Installed.Where(m => m.Source != ModSource.Missing).Select(m => (m.Key, m.Name, m.Folder.Path)).ToList();
-            log = await Task.Run(() => GameLog.Parse(ReadShared(Paths.GameLog), ModFingerprints.From(mods)));
+            (log, prints) = await Task.Run(() =>
+            {
+                var fingerprints = ModFingerprints.From(mods);
+                return (GameLog.Parse(ReadShared(Paths.GameLog), fingerprints), fingerprints);
+            });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -134,18 +193,23 @@ public sealed class Library : Observable
 
         var fresh = written != Settings.LogChecked;
         lastLog = log;
+        lastPrints = prints;
         lastLogTime = written;
         Settings.LogChecked = written;
         Settings.Save();
         UpdateIssues();
+        NoteBisectClue(log);
 
+        // During a search the clue in the banner says it, and a pop-up after every test game would be noise.
         var broken = Installed.Where(m => m.Enabled && m.IsError).ToList();
-        if (!fresh || broken.Count == 0) return;
+        if (!fresh || broken.Count == 0 || bisect is not null) return;
 
+        Settings.ErrorsCaught += broken.Count;
+        Settings.Save();
         var names = Installed.ToDictionary(m => m.Key, m => m.Name, StringComparer.OrdinalIgnoreCase);
         var warnings = broken.Sum(m => log.ByMod.GetValueOrDefault(m.Key)?.Count(p => p.Severity == Severity.Warning) ?? 0);
         ProblemsFound?.Invoke(new GameAlert(
-            [.. broken.Select(m => (m.Name, log.Errors(m.Key).First().Summary))],
+            [.. broken.Select(m => (m.Name, Explain(m, log.Errors(m.Key).First())))],
             warnings,
             log.Report(names, written)));
     }
@@ -218,6 +282,7 @@ public sealed class Library : Observable
         for (var pass = 0; pass < 4; pass++)
         {
             await Task.Delay(pass == 0 ? TimeSpan.FromSeconds(15) : TimeSpan.FromMinutes(3));
+            while (Resting) await Task.Delay(TimeSpan.FromSeconds(30));
 
             var due = Installed.Where(m => m.Source != ModSource.Missing).Select(m => m.WorkshopId).OfType<ulong>()
                 .Distinct().Where(id => !KnowsRequirements(id)).ToList();
@@ -252,8 +317,8 @@ public sealed class Library : Observable
                 && Directory.GetLastWriteTimeUtc(path) < lastLogTime)
             {
                 error = true;
-                issues.Add($"Your last game logged errors from it: {errors[0].Summary}");
-                issues.AddRange(errors.Skip(1).Select(e => e.Summary));
+                issues.Add($"Your last game logged errors from it: {Explain(mod, errors[0])}");
+                issues.AddRange(errors.Skip(1).Select(e => Explain(mod, e)));
             }
 
             if (mod.Source != ModSource.Missing && mod.WorkshopId is { } id && requirements.TryGetValue(id, out var needs))
@@ -270,6 +335,12 @@ public sealed class Library : Observable
                 }
             }
 
+            if (SteamTwin(mod) is not null)
+            {
+                issues.Add("Also subscribed in Steam, and both copies are on, so UBOAT loads it twice. Fix switches this copy off.");
+                fixable = true;
+            }
+
             if (game is not null && mod.Folder.Manifest is { GameVersions.Count: > 0 } manifest && !GameLog.Supports(manifest.GameVersions, game))
                 issues.Add($"Made for {string.Join(", ", manifest.GameVersions)}, but you have UBOAT {game}. It may not work.");
 
@@ -279,12 +350,51 @@ public sealed class Library : Observable
         }
     }
 
+    // Turns a logged problem into a note a player can act on: how often it happened, what was missing, or whether the mod looks out of date.
+    string Explain(InstalledMod mod, LogProblem problem)
+    {
+        var text = problem.Summary + (problem.Count > 1 ? $", {problem.Count:N0} times last game" : "");
+        if (problem.Count >= 100) text += ". Errors this often can lower your frame rate";
+
+        if (problem.Missing is { } assembly)
+        {
+            var provider = lastPrints?.ForAssembly(assembly) is { } key ? Installed.FirstOrDefault(m => m.Key.Equals(key, StringComparison.OrdinalIgnoreCase)) : null;
+            text += provider switch
+            {
+                null => $". It couldn't load {assembly}, so a mod it needs may not be installed",
+                { Enabled: false } => $". It couldn't load {assembly}, which comes from {provider.Name}. That mod is switched off",
+                _ when Installed.IndexOf(provider) > Installed.IndexOf(mod) => $". It couldn't load {assembly}, which comes from {provider.Name}. That mod loads after it, and should load first",
+                _ => $". It couldn't load {assembly}, which comes from {provider.Name}",
+            };
+        }
+        else if (problem.Outdated)
+        {
+            text += ". It uses parts of UBOAT, or of another mod, that aren't there in this version, so it was likely made for an older version";
+            if (mod.Tile is { State: TileState.Outdated }) text += ". An update is ready";
+        }
+        return text.EndsWith('.') ? text : text + ".";
+    }
+
+    // A Flotilla download that's switched on while the same mod's Steam subscription is on too.
+    InstalledMod? SteamTwin(InstalledMod mod) =>
+        mod is { Source: ModSource.Download, Enabled: true, WorkshopId: { } id }
+            ? Installed.FirstOrDefault(m => m is { Source: ModSource.Steam, Enabled: true } && m.WorkshopId == id)
+            : null;
+
     public async void Fix(InstalledMod mod)
     {
         if (mod.WorkshopId is not { } id) return;
         if (GameIsRunning())
         {
             Status.Warn("Close UBOAT first. Mods can't be changed while the game or its launcher is open.");
+            return;
+        }
+
+        // Steam keeps its copy up to date, so that's the one that stays on.
+        if (SteamTwin(mod) is not null)
+        {
+            mod.Enabled = false;
+            if (Save("Switched off a doubled mod")) Status.Say($"Switched off Flotilla's copy of {mod.Name}. The Steam copy stays on.");
             return;
         }
 
@@ -436,6 +546,7 @@ public sealed class Library : Observable
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         do
         {
+            if (Resting) continue;
             try
             {
                 if (await featured.ReadAsync() is { } ids && !ids.SequenceEqual(FeaturedIds)) FeaturedIds = ids;
@@ -511,6 +622,33 @@ public sealed class Library : Observable
         }
     }
 
+    public long BackupSize() => Directory.Exists(backups) ? new DirectoryInfo(backups).EnumerateFiles("*", Everything).Sum(f => f.Length) : 0;
+
+    public bool DeleteBackups()
+    {
+        try
+        {
+            if (Directory.Exists(backups)) Directory.Delete(backups, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Status.Warn($"Couldn't delete every backup: {e.Message}");
+            return false;
+        }
+        foreach (var mod in Installed) mod.RollbackNote = null;
+        Status.Say("Deleted the update backups.");
+        return true;
+    }
+
+    void DeleteBackup(ulong id)
+    {
+        try
+        {
+            if (Directory.Exists(BackupOf(id))) Directory.Delete(BackupOf(id), recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
     public string? RollbackNote(InstalledMod mod) =>
         mod is { Source: ModSource.Download, WorkshopId: { } id } && ReadBackup(id) is { } backup
             ? $"Go back to the version you had before {backup.Taken.ToLocalTime():d MMM}"
@@ -564,11 +702,21 @@ public sealed class Library : Observable
     public string BisectTitle { get; private set => Set(ref field, value); } = "";
     public string BisectText { get; private set => Set(ref field, value); } = "";
 
-    IEnumerable<string> NeedsOf(string key)
+    // What each mod can't run without during a search: the Workshop items it requires, and the mods it's a patch for.
+    // Worked out once per action, because the search asks about every mod many times.
+    Func<string, IEnumerable<string>> NeedsOf()
     {
-        var mod = Installed.FirstOrDefault(m => m.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
-        if (mod?.WorkshopId is not { } id || !requirements.TryGetValue(id, out var needs)) return [];
-        return needs.Ids.Select(InstalledCopy).OfType<InstalledMod>().Select(m => m.Key);
+        var all = Installed.Where(m => m.Source != ModSource.Missing).ToList();
+        var described = all.Select(m => (m.Name, m.Tile?.Item.Description ?? m.Folder.Manifest?.Description ?? "")).ToList();
+        var map = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < all.Count; i++)
+        {
+            var required = all[i].WorkshopId is { } id && requirements.TryGetValue(id, out var needs)
+                ? needs.Ids.Select(InstalledCopy).OfType<InstalledMod>().Select(m => m.Key)
+                : [];
+            map.TryAdd(all[i].Key, [.. required, .. LoadOrder.Bases(described, i).Select(j => all[j].Key)]);
+        }
+        return key => map.GetValueOrDefault(key) ?? [];
     }
 
     public bool StartBisect()
@@ -587,24 +735,31 @@ public sealed class Library : Observable
 
         var original = on.Select(m => new PackEntry(m.Key, 0, m.Name)).ToList();
         Remember("Before finding a broken mod");
-        bisect = Bisect.Start(original, [.. original.Select(m => m.Key)], NeedsOf);
+        bisect = Bisect.Start(original, [.. original.Select(m => m.Key)], NeedsOf());
         return ApplyBisect();
     }
 
     public void AnswerBisect(bool stillBroken)
     {
-        if (bisect is null) return;
-        bisect = bisect.Answer(stillBroken, NeedsOf);
+        if (bisect is null || BisectBlockedByGame()) return;
+        bisect = bisect.Answer(stillBroken, NeedsOf());
         ApplyBisect();
+    }
+
+    // The mods can't be saved while UBOAT runs, so the search mustn't move on or end until it closes.
+    bool BisectBlockedByGame()
+    {
+        if (!GameIsRunning()) return false;
+        Status.Warn("Close UBOAT first, then answer. The search stays where it is until the game is closed.");
+        return true;
     }
 
     public void StopBisect(bool turnOffCulprit = false)
     {
-        if (bisect is not { } search) return;
+        if (bisect is not { } search || BisectBlockedByGame()) return;
 
         var culprit = turnOffCulprit ? search.Culprit : null;
-        var original = new HashSet<string>(search.Original.Select(m => m.Key), StringComparer.OrdinalIgnoreCase);
-        if (culprit is not null) original.Remove(culprit);
+        var original = new HashSet<string>(culprit is null ? search.Original.Select(m => m.Key) : search.WithoutCulprit(NeedsOf()), StringComparer.OrdinalIgnoreCase);
         foreach (var mod in Installed) mod.Enabled = original.Contains(mod.Key);
 
         bisect = null;
@@ -614,8 +769,9 @@ public sealed class Library : Observable
         }
         catch (IOException) { }
         Raise(nameof(IsBisecting));
-        if (Save("Finished finding a broken mod"))
-            Status.Say(culprit is null ? "Your mods are back the way they were." : $"Your mods are back the way they were, with {NameOf(culprit)} switched off.");
+        if (!Save("Finished finding a broken mod")) return;
+        if (culprit is null) Status.Say("Your mods are back the way they were.");
+        else Status.Say($"Your mods are back the way they were, with {NameOf(culprit)} switched off{AlongWith(search, culprit, original)}.");
     }
 
     string NameOf(string key) => Installed.FirstOrDefault(m => m.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Name ?? key;
@@ -624,7 +780,7 @@ public sealed class Library : Observable
     {
         if (bisect is not { } search) return false;
 
-        var on = new HashSet<string>(search.Culprit is null ? search.EnabledNow() : search.Original.Select(m => m.Key).Where(k => !k.Equals(search.Culprit, StringComparison.OrdinalIgnoreCase)), StringComparer.OrdinalIgnoreCase);
+        var on = new HashSet<string>(search.EnabledNow(NeedsOf()), StringComparer.OrdinalIgnoreCase);
         foreach (var mod in Installed) mod.Enabled = on.Contains(mod.Key);
         if (!Save("Finding a broken mod")) return false;
 
@@ -637,7 +793,7 @@ public sealed class Library : Observable
         if (search.Culprit is { } culprit)
         {
             BisectTitle = $"Found it: {NameOf(culprit)}";
-            BisectText = $"Every test points at {NameOf(culprit)}. It's switched off now and everything else is on, so play once more to check. "
+            BisectText = $"Every test points at {NameOf(culprit)}. It's switched off now{AlongWith(search, culprit, on)}, and everything else is on, so play once more to check. "
                 + "If the problem's gone, keep it off and tell its author. If it's still there, two mods may be clashing, so put everything back and ask in the mod's comments.";
         }
         else
@@ -646,10 +802,43 @@ public sealed class Library : Observable
             BisectTitle = $"Finding a broken mod: test {search.Round} of about {search.Round - 1 + search.RoundsLeft}";
             BisectText = $"{search.Suspects.Count} mods could be the cause. {testing} of them are on for this test. Play UBOAT and try what went wrong, then come back and say whether it still happens.";
         }
+        BisectClue = null;
         Raise(nameof(BisectFound));
         Raise(nameof(IsBisecting));
+        Raise(nameof(CanUndoBisect));
         Raise(nameof(BisectTitle));
         return true;
+    }
+
+    // Mods that had to go off with the culprit because they need or patch it, said out loud so none stays off unnoticed.
+    string AlongWith(Bisect search, string culprit, IReadOnlySet<string> on)
+    {
+        var also = search.Original.Select(m => m.Key).Where(k => !k.Equals(culprit, StringComparison.OrdinalIgnoreCase) && !on.Contains(k)).Select(NameOf).ToList();
+        return also.Count == 0 ? "" : $", along with {Names(also)}, which {(also.Count == 1 ? "needs" : "need")} it";
+    }
+
+    public bool CanUndoBisect => bisect?.Previous is not null;
+
+    // True when UBOAT hasn't run since this test was set up, so an answer would be a guess.
+    public bool BisectUnplayed => bisect is { Played: false, Culprit: null };
+
+    // A hint from the log of a game played with this test: which of the mods that were on logged errors. Never an answer.
+    public string? BisectClue { get; private set => Set(ref field, value); }
+
+    public void UndoBisect()
+    {
+        if (bisect?.Previous is not { } before || BisectBlockedByGame()) return;
+        bisect = before;
+        if (ApplyBisect()) Status.Say("Went back one test. Answer it again.");
+    }
+
+    void NoteBisectClue(GameLog log)
+    {
+        if (bisect is not { Played: true } search) return;
+        var on = search.EnabledNow(NeedsOf()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var noisy = Installed.Where(m => on.Contains(m.Key) && log.Errors(m.Key).Any()).Select(m => m.Name).ToList();
+        BisectClue = noisy.Count == 0 ? null
+            : $"Your game from this test logged errors from {Names(noisy)}. That's a clue, not proof, so answer from what you saw.";
     }
 
     public bool BisectFound => bisect?.Culprit is not null;
@@ -713,9 +902,15 @@ public sealed class Library : Observable
 
     public async Task<SharedCode?> ShareAsync(IReadOnlyList<PackEntry> setup, int hours)
     {
+        var body = ModPack.Write(setup);
+        if (body.Length > Community.MaxShare)
+        {
+            Status.Warn($"{setup.Count:N0} mods is too many for a share code. Use \"Export the mods that are on to a file\" in the ... menu on Installed, and send the file instead.");
+            return null;
+        }
         try
         {
-            if (await community.ShareAsync(Settings.InstallId, ModPack.Write(setup), hours) is { } code) return code;
+            if (await community.ShareAsync(Settings.InstallId, body, hours) is { } code) return code;
             Status.Warn("Couldn't make a share code right now. Try again in a few minutes.");
             return null;
         }
@@ -881,6 +1076,7 @@ public sealed class Library : Observable
                 Status.Warn($"Couldn't delete {mod.Name}: {e.Message}");
                 return;
             }
+            if (mod is { Source: ModSource.Download, WorkshopId: { } id }) DeleteBackup(id);
         }
 
         Installed.Remove(mod);
@@ -954,7 +1150,8 @@ public sealed class Library : Observable
         }
 
         Importing = true;
-        var keys = new List<string>();
+        var keyAt = new string?[wanted.Count];
+        var latest = new List<(int Index, WorkshopItem Item)>();
         var problems = new List<string>();
         var newer = new List<string>();
         var steamVersion = new List<string>();
@@ -973,14 +1170,14 @@ public sealed class Library : Observable
                 var entry = wanted[i];
                 if (entry.WorkshopId is not { } id)
                 {
-                    if (found.ContainsKey(entry.Key)) keys.Add(entry.Key);
+                    if (found.ContainsKey(entry.Key)) keyAt[i] = entry.Key;
                     else problems.Add($"{entry.Name} (a local mod that isn't in your Mods folder)");
                     continue;
                 }
 
                 if (found.ContainsKey(ModFolder.SteamPrefix + id))
                 {
-                    keys.Add(ModFolder.SteamPrefix + id);
+                    keyAt[i] = ModFolder.SteamPrefix + id;
                     if (entry.Manifest != 0 && subscribed.GetValueOrDefault(id) != entry.Manifest) steamVersion.Add(entry.Name);
                     continue;
                 }
@@ -994,12 +1191,14 @@ public sealed class Library : Observable
                 var manifest = entry.Manifest != 0 ? entry.Manifest : item.Manifest;
                 if (found.ContainsKey(key) && downloaded.GetValueOrDefault(id) == manifest)
                 {
-                    keys.Add(key);
+                    keyAt[i] = key;
                     continue;
                 }
-                if (manifest == 0)
+
+                // The latest version downloads in batches later, which is far quicker than one SteamCMD run per mod.
+                if (entry.Manifest == 0 || entry.Manifest == item.Manifest)
                 {
-                    problems.Add($"{item.Title} (Steam didn't say which version to download)");
+                    latest.Add((i, item));
                     continue;
                 }
 
@@ -1009,8 +1208,24 @@ public sealed class Library : Observable
                     failure = await DownloadAsync(item, item.Manifest, i, wanted.Count);
                     if (failure is null) newer.Add(item.Title);
                 }
-                if (failure is null) keys.Add(key);
+                if (failure is null)
+                {
+                    keyAt[i] = key;
+                    CountDownload(found.ContainsKey(key));
+                }
                 else problems.Add($"{item.Title} ({failure.TrimEnd('.')})");
+            }
+
+            var failures = await DownloadLatestAsync(latest);
+            foreach (var (index, item) in latest)
+            {
+                if (failures.GetValueOrDefault(item.Id) is { } failure)
+                {
+                    problems.Add($"{item.Title} ({failure.TrimEnd('.')})");
+                    continue;
+                }
+                keyAt[index] = item.Id.ToString();
+                CountDownload(found.ContainsKey(item.Id.ToString()));
             }
         }
         catch (Exception e)
@@ -1026,7 +1241,7 @@ public sealed class Library : Observable
         }
 
         Reload();
-        var count = Arrange(keys);
+        var count = Arrange(keyAt.OfType<string>());
         if (!Save(reason)) return false;
         SyncTiles();
 
@@ -1172,6 +1387,51 @@ public sealed class Library : Observable
         foreach (var item in Profiles) item.IsActive = ProfileStore.IsActive(item.Profile, available, enabled);
     }
 
+    void CountDownload(bool update)
+    {
+        if (update) Settings.UpdatesApplied++;
+        else Settings.ModsInstalled++;
+        Settings.Save();
+    }
+
+    const int LatestBatch = 25;
+
+    // Downloads the latest version of each mod, 25 to a SteamCMD run, trying failed ones once more. Returns why each failure failed.
+    async Task<Dictionary<ulong, string>> DownloadLatestAsync(List<(int Index, WorkshopItem Item)> mods)
+    {
+        var failures = new Dictionary<ulong, string>();
+        var pending = mods.Select(m => m.Item).ToList();
+        var done = 0;
+        for (var attempt = 1; attempt <= 2 && pending.Count > 0; attempt++)
+        {
+            var failed = new List<WorkshopItem>();
+            foreach (var batch in pending.Chunk(LatestBatch))
+            {
+                var progress = new Progress<SteamCmdEvent>(update =>
+                {
+                    if (update.State != ItemState.Downloading || Array.Find(batch, m => m.Id == update.Id) is not { } item) return;
+                    Status.Work(item.Title, $"Downloading {Math.Min(done + 1, mods.Count)} of {mods.Count}", (done + update.Progress) / Math.Max(1, mods.Count), Find(item.Id));
+                });
+                var results = await steam.DownloadAsync([.. batch.Select(m => (m.Id, m.Size))], progress);
+                foreach (var item in batch)
+                {
+                    if (results.GetValueOrDefault(item.Id) is { } reason)
+                    {
+                        failures[item.Id] = reason;
+                        failed.Add(item);
+                    }
+                    else
+                    {
+                        failures.Remove(item.Id);
+                        done++;
+                    }
+                }
+            }
+            pending = failed;
+        }
+        return failures;
+    }
+
     Task<string?> DownloadAsync(WorkshopItem item, ulong manifest, int index, int count)
     {
         var detail = count > 1 ? $"Importing {index + 1} of {count}" : "Importing";
@@ -1192,6 +1452,7 @@ public sealed class Library : Observable
 
     void SaveSteamOrder()
     {
+        if (!Settings.SyncSteamOrder) return;
         var steamMods = Installed.Where(m => m.Source == ModSource.Steam && m.WorkshopId is not null).Select(m => (m.WorkshopId!.Value, m.Enabled)).ToList();
         if (!SteamOrder.Save(steamMods)) return;
 
@@ -1201,6 +1462,7 @@ public sealed class Library : Observable
 
     async Task RestartSteamIfBehindAsync()
     {
+        if (!Settings.SyncSteamOrder) return;
         SaveSteamOrder();
         if (SteamOrder.SteamStarted() is not { } started || started >= Settings.SteamOrderSaved) return;
 
@@ -1219,10 +1481,29 @@ public sealed class Library : Observable
             return;
         }
 
-        if (Settings.ClearCacheBeforePlay) ClearCache(quiet: true);
+        // Rebuilding the cache is most of a big mod pack's load time, so it's only cleared when the mods behind it changed.
+        bool? cleared = null;
+        if (Settings.ClearCacheBeforePlay)
+        {
+            var on = Installed.Where(m => m.Enabled && m.Source != ModSource.Missing).Select(m => (m.Key, m.Folder.Path)).ToList();
+            var stamp = await Task.Run(() => CacheStamp.Of(on, Settings.GameVersion));
+            cleared = stamp != Settings.CacheStamp && ClearCache(quiet: true);
+            if (cleared == true)
+            {
+                Settings.CacheStamp = stamp;
+                Settings.Save();
+            }
+        }
         await RestartSteamIfBehindAsync();
-        if (!Shell.Open($"steam://rungameid/{Workshop.AppId}")) Status.Warn("Couldn't start UBOAT through Steam. Is Steam installed?");
-        else if (Settings.ClearCacheBeforePlay) Status.Say("Cleared UBOAT's cache and started the game. The first load takes a little longer while it rebuilds.");
+        if (!Shell.Open($"steam://rungameid/{Workshop.AppId}"))
+        {
+            Status.Warn("Couldn't start UBOAT through Steam. Is Steam installed?");
+            return;
+        }
+        Settings.GamesLaunched++;
+        Settings.Save();
+        if (cleared == true) Status.Say("Your mods changed since your last game, so Flotilla cleared UBOAT's cache. This load takes a little longer while it rebuilds.");
+        else if (cleared == false) Status.Say("Your mods haven't changed since your last game, so UBOAT's cache was kept and it loads faster.");
     }
 
     public void OpenModsFolder()
@@ -1235,6 +1516,9 @@ public sealed class Library : Observable
     {
         var key = tile.Id.ToString();
         var isNew = Installed.All(m => m.Key != key || m.Source == ModSource.Missing);
+        if (isNew) Settings.ModsInstalled++;
+        else Settings.UpdatesApplied++;
+        Settings.Save();
         Reload();
 
         if (installingFor is { } profile && ProfileStore.Resolve([key], profile.Mods).On.Count > 0)
@@ -1335,12 +1619,12 @@ public sealed class Library : Observable
             return null;
         }
 
-        Status.Work("Finding the best load order", "Checking what your mods need and what they change");
         var mods = new List<OrderMod>();
         try
         {
             foreach (var mod in on)
             {
+                Status.Work("Finding the best load order", $"Checking mods, {mods.Count + 1} of {on.Count}", (double)mods.Count / on.Count);
                 IReadOnlyList<ulong> needs = mod.WorkshopId is { } id ? await RequirementsOfAsync(id) : [];
                 var (sheets, text) = await Task.Run(() =>
                 {

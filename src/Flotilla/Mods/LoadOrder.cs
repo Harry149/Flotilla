@@ -29,16 +29,10 @@ public static class LoadOrder
             }
         }
 
+        var described = mods.Select(m => (m.Name, m.Description)).ToList();
         for (var after = 0; after < mods.Count; after++)
-        {
-            for (var before = 0; before < mods.Count; before++)
-            {
-                if (before == after || names[before].Length < 5) continue;
-                var inName = names[after].Contains(names[before], StringComparison.OrdinalIgnoreCase);
-                var inText = PatchWords.IsMatch(mods[after].Name) && mods[after].Description.Contains(names[before], StringComparison.OrdinalIgnoreCase);
-                if (inName || inText) rules.Add(new(before, after, null, $"Made for {names[before]}, so it loads after it"));
-            }
-        }
+            foreach (var before in Bases(described, after))
+                rules.Add(new(before, after, null, $"Made for {names[before]}, so it loads after it"));
 
         for (var after = 0; after < mods.Count; after++)
         {
@@ -83,6 +77,22 @@ public static class LoadOrder
     }
 
     public static string BaseName(string name) => GameLog.SplitTitle(name).Title.Trim();
+
+    // The mods that mods[patch] was made for: its name contains theirs ("Shadow Zone Patch"), or it's named like a patch and its description names them.
+    public static IEnumerable<int> Bases(IReadOnlyList<(string Name, string Description)> mods, int patch)
+    {
+        var name = BaseName(mods[patch].Name);
+        var patchLike = PatchWords.IsMatch(mods[patch].Name);
+        for (var other = 0; other < mods.Count; other++)
+        {
+            if (other == patch) continue;
+            var otherName = BaseName(mods[other].Name);
+            if (otherName.Length < 5) continue;
+            if (name.Contains(otherName, StringComparison.OrdinalIgnoreCase)
+                || patchLike && mods[patch].Description.Contains(otherName, StringComparison.OrdinalIgnoreCase))
+                yield return other;
+        }
+    }
 
     static bool Reaches(List<HashSet<int>> edges, int from, int to)
     {
