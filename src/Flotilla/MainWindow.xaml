@@ -526,23 +526,30 @@
             </Grid>
 
             <Grid x:Name="DialogLayer" Grid.ColumnSpan="2" Background="#B3020809" Visibility="Collapsed">
-                <Border Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24" CornerRadius="{StaticResource RoundLarge}"
+                <Border Width="440" Margin="0,40" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24" CornerRadius="{StaticResource RoundLarge}"
                         Background="{StaticResource Raised}" BorderBrush="{StaticResource Ghost}" BorderThickness="1">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="60" ShadowDepth="18" Direction="270" Opacity="0.6" Color="Black"/>
                     </Border.Effect>
-                    <StackPanel>
-                        <TextBlock x:Name="DialogTitle" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="22" TextWrapping="Wrap"/>
-                        <TextBlock x:Name="DialogText" Margin="0,8,0,0" FontSize="13.5" LineHeight="21" TextWrapping="Wrap" Foreground="{StaticResource Soft}"
-                                   Visibility="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource VisibleWhenSet}}"/>
-                        <TextBox x:Name="DialogInput" Style="{StaticResource Field}" Margin="0,16,0,0" MaxLength="40" TextChanged="OnDialogInput" AutomationProperties.Name="Name"/>
-                        <TextBlock x:Name="DialogHint" Margin="0,8,0,0" FontSize="12.5" TextWrapping="Wrap" Foreground="{StaticResource Danger}"
-                                   Visibility="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource VisibleWhenSet}}"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+                    <DockPanel>
+                        <TextBlock x:Name="DialogTitle" DockPanel.Dock="Top" FontFamily="{StaticResource Display}" FontStretch="{StaticResource DisplayStretch}" FontWeight="SemiBold" FontSize="22" TextWrapping="Wrap"/>
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
                             <Button x:Name="DialogCancel" Style="{StaticResource GhostButton}" Content="Cancel" Margin="0,0,10,0" Click="OnDialogCancel"/>
                             <Button x:Name="DialogConfirm" Style="{StaticResource Primary}" MinWidth="100" Click="OnDialogConfirm"/>
                         </StackPanel>
-                    </StackPanel>
+                        <TextBlock x:Name="DialogHint" DockPanel.Dock="Bottom" Margin="0,8,0,0" FontSize="12.5" TextWrapping="Wrap" Foreground="{StaticResource Danger}"
+                                   Visibility="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource VisibleWhenSet}}"/>
+                        <StackPanel x:Name="DialogHours" DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0" Visibility="Collapsed">
+                            <RadioButton x:Name="Hours24" Style="{StaticResource Pill}" GroupName="ShareHours" Content="24 hours" IsChecked="True"/>
+                            <RadioButton x:Name="Hours48" Style="{StaticResource Pill}" GroupName="ShareHours" Content="48 hours"/>
+                            <RadioButton x:Name="Hours72" Style="{StaticResource Pill}" GroupName="ShareHours" Content="72 hours"/>
+                        </StackPanel>
+                        <TextBox x:Name="DialogInput" DockPanel.Dock="Bottom" Style="{StaticResource Field}" Margin="0,16,0,0" MaxLength="40" TextChanged="OnDialogInput" AutomationProperties.Name="Name"/>
+                        <ScrollViewer x:Name="DialogScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                            <TextBlock x:Name="DialogText" Margin="0,8,0,0" FontSize="13.5" LineHeight="21" TextWrapping="Wrap" Foreground="{StaticResource Soft}"
+                                       Visibility="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource VisibleWhenSet}}"/>
+                        </ScrollViewer>
+                    </DockPanel>
                 </Border>
             </Grid>
         </Grid>

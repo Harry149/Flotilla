@@ -10,17 +10,26 @@ public sealed record VoteCount(int Works, int Broken)
     public int Percent => Total == 0 ? 0 : (int)Math.Round(100.0 * Works / Total);
 }
 
+public sealed record SharedCode(string Code, DateTime? Expires);
+
 public sealed class Community(HttpClient http)
 {
     static string Api => Sailors.Api;
 
-    public async Task<string?> ShareAsync(string installId, string setup)
+    public async Task<SharedCode?> ShareAsync(string installId, string setup, int hours)
     {
-        using var response = await http.PostAsJsonAsync($"{Api}/share", new { id = installId, body = setup });
-        if (!response.IsSuccessStatusCode) return null;
+        using var response = await http.PostAsJsonAsync($"{Api}/share", new { id = installId, body = setup, hours });
+        return response.IsSuccessStatusCode ? ParseShare(await response.Content.ReadAsStringAsync()) : null;
+    }
 
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return document.RootElement.Text("code") is { Length: > 0 } code ? code : null;
+    public static SharedCode? ParseShare(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.Text("code") is not { Length: > 0 } code) return null;
+
+        // An older server sends no expiry, so none is shown.
+        var expires = document.RootElement.Number("expires");
+        return new SharedCode(code, expires > 0 ? DateTimeOffset.FromUnixTimeSeconds(expires).UtcDateTime : null);
     }
 
     public async Task<string?> ReadShareAsync(string code)

@@ -175,6 +175,8 @@ Check(bisect.Culprit == "m5" && bisect.Round == 4, "the search ends on a single 
 Check(ShareCodes.Normalise("flt-8k2qrt") == "8K2QRT" && ShareCodes.Normalise("FLT-8K2QR7") == "8K2QR7" && ShareCodes.Display("8K2QR7") == "FLT-8K2QR7", "share codes ignore case and the FLT- prefix");
 Check(ShareCodes.Normalise("flotilla://setup/8K2QR7") == "8K2QR7" && ShareCodes.Normalise("8K2-QR7") == "8K2QR7", "a link or a code with a dash works too");
 Check(ShareCodes.Normalise("OOOOOO") is null && ShareCodes.Normalise("8K2Q") is null, "look-alike letters and short codes are refused");
+Check(Community.ParseShare("""{"code":"8K2QR7","expires":1760612400}""") == new SharedCode("8K2QR7", new DateTime(2025, 10, 16, 11, 0, 0, DateTimeKind.Utc))
+    && Community.ParseShare("""{"code":"8K2QR7"}""") == new SharedCode("8K2QR7", null) && Community.ParseShare("""{"error":"Try again"}""") is null, "a share code is read with its expiry, when the server sends one");
 Check(Community.ParseVotes("""{"mods":{"3815285055":[12,1],"bad":[1,1],"7":[0,0]}}""") is { Count: 2 } votes && votes[3815285055] is { Percent: 92, Total: 13 }, "vote counts are read");
 
 Console.WriteLine("Change notes");

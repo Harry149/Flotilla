@@ -428,8 +428,10 @@ public partial class MainWindow : Window
 
     void OnTutorialClose(object sender, RoutedEventArgs e) => CloseTour();
 
-    Task<string?> Ask(string title, string text, string confirm, string? input = null, bool danger = false, Func<string, string?>? check = null, string cancel = "Cancel", int longest = 40)
+    Task<string?> Ask(string title, string text, string confirm, string? input = null, bool danger = false, Func<string, string?>? check = null, string cancel = "Cancel", int longest = 40, bool pickHours = false)
     {
+        DialogHours.Visibility = pickHours ? Visibility.Visible : Visibility.Collapsed;
+        Hours24.IsChecked = true;
         DialogInput.MaxLength = longest;
         dialog?.TrySetResult(null);
         dialog = new TaskCompletionSource<string?>();
@@ -437,6 +439,7 @@ public partial class MainWindow : Window
 
         DialogTitle.Text = Themes.Heading(title);
         DialogText.Text = text;
+        DialogScroll.ScrollToTop();
         DialogHint.Text = "";
         DialogConfirm.Content = confirm;
         DialogCancel.Content = cancel;
@@ -612,15 +615,25 @@ public partial class MainWindow : Window
     async Task ShareAsync(IReadOnlyList<Mods.PackEntry> setup, string what)
     {
         if (!Sailors.Enabled) return;
+        if (setup.Count == 0)
+        {
+            library.Status.Warn("There's nothing to share. Switch on some mods first.");
+            return;
+        }
+        if (await Ask("Share your setup", $"Makes a code and a link for {what}. How long should it work?", "Make a code", pickHours: true) is null) return;
+        var hours = Hours48.IsChecked == true ? 48 : Hours72.IsChecked == true ? 72 : 24;
+
         library.Status.Work("Sharing", $"Making a code for {what}");
-        var code = await library.ShareAsync(setup);
+        var shared = await library.ShareAsync(setup, hours);
         library.Status.Idle();
-        if (code is null) return;
+        if (shared is null) return;
+        var code = shared.Code;
 
         var link = $"{Sailors.Api}/s/{code}";
         TryCopy(link);
+        var until = shared.Expires is { } expires ? $"It works until {expires.ToLocalTime():ddd d MMM, HH:mm}. After that, make a new one.\n\n" : "";
         var answer = await Ask($"Share code: {ShareCodes.Display(code)}",
-            $"The link is copied, so you can paste it straight into Discord. It shows the mods and opens Flotilla:\n\n{link}\n\n"
+            $"The link is copied, so you can paste it straight into Discord. It shows the mods and opens Flotilla:\n\n{link}\n\n{until}"
             + $"Friends can also press Use a code in Flotilla and type {ShareCodes.Display(code)}. It installs the same mods at the same versions, in the same order.",
             "Copy the code", cancel: "Done");
         if (answer is not null && TryCopy(ShareCodes.Display(code))) library.Status.Say($"Copied {ShareCodes.Display(code)}.");
@@ -651,7 +664,7 @@ public partial class MainWindow : Window
         library.Status.Idle();
         if (setup is null)
         {
-            library.Status.Warn($"No setup has the code {ShareCodes.Display(code)}. Check it with whoever sent it.");
+            library.Status.Warn($"No setup has the code {ShareCodes.Display(code)}. It may have run out, since codes last 1 to 3 days. Ask for a new one.");
             return;
         }
 

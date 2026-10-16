@@ -711,16 +711,11 @@ public sealed class Library : Observable
         }
     }
 
-    public async Task<string?> ShareAsync(IReadOnlyList<PackEntry> setup)
+    public async Task<SharedCode?> ShareAsync(IReadOnlyList<PackEntry> setup, int hours)
     {
-        if (setup.Count == 0)
-        {
-            Status.Warn("There's nothing to share. Switch on some mods first.");
-            return null;
-        }
         try
         {
-            if (await community.ShareAsync(Settings.InstallId, ModPack.Write(setup)) is { } code) return code;
+            if (await community.ShareAsync(Settings.InstallId, ModPack.Write(setup), hours) is { } code) return code;
             Status.Warn("Couldn't make a share code right now. Try again in a few minutes.");
             return null;
         }
